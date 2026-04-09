@@ -1,10 +1,10 @@
 ---
-description: Get a code review from Gemini CLI as a second opinion
+description: Get a devil's advocate review that challenges your design decisions
 allowed-tools: Bash, Read, Glob
 argument-hint: [file-path] [--model <model>]
 ---
 
-Perform a code review using Gemini CLI. This gives you a second opinion from a different AI model.
+Get a devil's advocate review using Gemini CLI. Instead of finding bugs, this challenges your design decisions and proposes alternatives.
 
 ## Step 1: Parse --model parameter
 
@@ -30,13 +30,13 @@ If $ARGUMENTS is empty:
 ## Step 3: Locate system prompt
 
 Determine the absolute path to the system prompt file:
-- The file is at `system-prompts/review.md` relative to this plugin's root directory
+- The file is at `system-prompts/adversarial-review.md` relative to this plugin's root directory
 - The plugin root is the parent of the `commands/` directory containing this file
 - Store this absolute path as SYSTEM_PROMPT_PATH
 
 ## Step 4: Call Gemini CLI
 
-Run the following bash command, passing REVIEW_INPUT via stdin to avoid shell escaping issues:
+Run the following bash command, passing REVIEW_INPUT via stdin:
 
 ```bash
 printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -o text -m $MODEL
