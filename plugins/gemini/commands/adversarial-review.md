@@ -12,6 +12,8 @@ Check if $ARGUMENTS contains `--model <value>`:
 - If yes: extract the value as MODEL, remove `--model <value>` from $ARGUMENTS
 - If no: set MODEL = flash
 
+Valid model values: flash, pro, flash-lite, or any full model name.
+
 ## Step 2: Determine input
 
 If $ARGUMENTS (after --model removal) is provided:
@@ -39,6 +41,8 @@ Run the following bash command, passing REVIEW_INPUT via stdin:
 ```bash
 echo "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -o text -m $MODEL
 ```
+
+Note: We pipe input via stdin instead of -p flag to handle large diffs and special characters safely.
 
 ## Step 5: Present results
 
