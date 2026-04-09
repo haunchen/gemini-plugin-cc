@@ -1,5 +1,5 @@
 ---
-description: Check Gemini CLI installation, version, and API key configuration
+description: Check Gemini CLI installation, version, and authentication status
 allowed-tools: Bash
 ---
 
@@ -18,12 +18,12 @@ Run: `gemini --version`
 
 - Report the version number
 
-## 3. Check API key
+## 3. Check authentication
 
-Run: `test -n "$GEMINI_API_KEY" && echo "GEMINI_API_KEY is set" || echo "GEMINI_API_KEY is not set"`
+Run: `test -f ~/.gemini/oauth_creds.json && echo "OAuth credentials found" || echo "OAuth credentials not found"`
 
-- If set: confirm it is configured (do NOT print the actual key value)
-- If not set: tell the user to set it with `export GEMINI_API_KEY=your-key-here` or run `gemini` interactively to authenticate via Google OAuth
+- If found: confirm Google OAuth is configured
+- If not found: tell the user to run `gemini` interactively to authenticate via Google OAuth
 
 ## Summary
 

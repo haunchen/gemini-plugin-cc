@@ -29,7 +29,11 @@ echo "$INPUT" | GEMINI_SYSTEM_MD="$PATH" gemini -o text -m pro
 
 No automated tests yet. Manual testing:
 
-1. Install plugin: `/install-plugin` from this repo
+1. Install plugin from this repo:
+   - `claude plugin marketplace add .` — register local dir as marketplace
+   - `claude plugin install gemini --scope project` — install the plugin
+   - Restart Claude Code session (plugins require restart)
+   - Alternative for one-off testing: `claude --plugin-dir .`
 2. `/gemini:setup` — verify CLI, version, API key
 3. `/gemini:review` — review current git diff
 4. `/gemini:review path/to/file` — review specific file
@@ -38,5 +42,5 @@ No automated tests yet. Manual testing:
 
 - Phase 1 is zero-code: no JS, no runners, no job tracking
 - Review output must be returned verbatim from Gemini — do not reformat or summarize
-- Hardcoded `-m pro` for review; model switching deferred to Phase 2
+- Hardcoded `-m flash` for review (alias, auto-resolves to latest flash); model switching deferred to Phase 2
 - Specs live in `docs/specs/`, design docs in `docs/plans/`

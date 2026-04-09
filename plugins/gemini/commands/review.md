@@ -31,7 +31,7 @@ Determine the absolute path to the system prompt file:
 Run the following bash command, passing REVIEW_INPUT via stdin to avoid shell escaping issues:
 
 ```bash
-echo "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -o text -m pro
+echo "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -o text -m flash
 ```
 
 Note: We pipe input via stdin instead of -p flag to handle large diffs and special characters safely.
@@ -43,5 +43,5 @@ Show the Gemini response directly to the user. Do not modify, summarize, or refo
 ## Error handling
 
 - If `gemini` command is not found: suggest running `/gemini:setup` first
-- If the command fails with an auth error: suggest checking GEMINI_API_KEY or running `gemini` interactively to re-authenticate
+- If the command fails with an auth error: suggest running `gemini` interactively to re-authenticate via Google OAuth
 - If the command times out or returns an error: show the error message and suggest retrying

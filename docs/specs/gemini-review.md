@@ -13,7 +13,7 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 
 ### R1: Setup 檢查
 - **Level**: MUST
-- **Description**: /gemini:setup 依序檢查 Gemini CLI 安裝狀態、版本、API key 環境變數，回報結果。
+- **Description**: /gemini:setup 依序檢查 Gemini CLI 安裝狀態、版本、Google OAuth 認證狀態，回報結果。
 
 ### R2: Review 輸入來源
 - **Level**: MUST
@@ -29,7 +29,7 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 
 ### R5: 錯誤情境引導
 - **Level**: SHOULD
-- **Description**: CLI 不存在、API key 未設、網路錯誤等情境，提供使用者可理解的錯誤訊息和修復建議。
+- **Description**: CLI 不存在、OAuth 未認證、網路錯誤等情境，提供使用者可理解的錯誤訊息和修復建議。
 
 ### R6: 零程式碼實作
 - **Level**: MUST
@@ -40,7 +40,7 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 ### S1: 首次設定檢查
 - **Given**: 使用者尚未確認 Gemini CLI 環境
 - **When**: 執行 /gemini:setup
-- **Then**: 依序顯示 CLI 安裝狀態、版本號、API key 設定狀態
+- **Then**: 依序顯示 CLI 安裝狀態、版本號、OAuth 認證狀態
 - **Implements**: #R1
 
 ### S2: 以 git diff 審查
@@ -85,8 +85,8 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 - **Date**: 2026-04-09
 
 ### D4: 預設使用 Gemini Pro 模型
-- **Decision**: review command 硬編碼 `-m pro`
-- **Rationale**: review 場景品質優先，pro 模型推理能力最強。Phase 2 的 /gemini:config 再開放模型切換
+- **Decision**: review command 硬編碼 `-m flash`（CLI 別名，自動解析到最新 flash 版本）
+- **Rationale**: Pro 系列透過 OAuth 頻繁 429（MODEL_CAPACITY_EXHAUSTED），flash 容量充裕且 code review 品質足夠。Phase 2 的 /gemini:config 再開放模型切換
 - **Date**: 2026-04-09
 
 ## Pending Changes
