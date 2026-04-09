@@ -1,0 +1,11 @@
+{
+  "name": "gemini",
+  "version": "0.1.0",
+  "description": "Gemini CLI integration for Claude Code — get a second opinion on your code",
+  "author": {
+    "name": "Frank Chen"
+  },
+  "repository": "https://github.com/anthropics/gemini-plugin-cc",
+  "license": "MIT",
+  "keywords": ["gemini", "code-review", "second-opinion"]
+}
