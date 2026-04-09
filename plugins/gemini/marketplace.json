@@ -14,7 +14,7 @@
       "author": {
         "name": "Frank Chen"
       },
-      "source": "./plugins/gemini",
+      "source": ".",
       "category": "development"
     }
   ]
