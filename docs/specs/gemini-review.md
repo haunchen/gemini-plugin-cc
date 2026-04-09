@@ -1,6 +1,6 @@
 ---
 domain: gemini-review
-status: draft
+status: active
 created: 2026-04-09
 last_modified: 2026-04-09
 ---
