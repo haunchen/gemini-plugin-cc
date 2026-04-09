@@ -91,4 +91,37 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 
 ## Pending Changes
 
-<!-- Brownfield delta 放這裡，dev-finish spec sync 時清除 -->
+### R7: 模型切換參數
+- **Level**: MUST
+- **Description**: 所有 command 支援 `--model <value>` 參數指定 Gemini 模型，未指定時 fallback 到 flash。
+- **Status**: ADDED
+
+### R8: Ask 提問功能
+- **Level**: MUST
+- **Description**: /gemini:ask 接受文字問題，可選附帶檔案路徑作為 context，透過 Gemini CLI 回答。輸出為自由格式。
+- **Status**: ADDED
+
+### R9: Adversarial Review
+- **Level**: MUST
+- **Description**: /gemini:adversarial-review 以 devil's advocate 角度挑戰設計決策，輸出包含 Challenge Summary、Challenges（含 IMPACT 和 alternative）、Overall Assessment（SOLID/RECONSIDER/RETHINK）。
+- **Status**: ADDED
+
+### R10: Security Review
+- **Level**: MUST
+- **Description**: /gemini:security-review 專攻安全漏洞檢查（OWASP Top 10、CSRF、供應鏈 CVE、secrets 掃描、HTTP 標頭等），輸出包含 Security Summary、Vulnerabilities（含攻擊範例、CWE 編號、驗證方法）、Verdict（SECURE/CONCERNS/VULNERABLE）。
+- **Status**: ADDED
+
+### R11: Security Review 四級嚴重度
+- **Level**: MUST
+- **Description**: Security review 的 severity 使用 CRITICAL/HIGH/MEDIUM/LOW 四級，比普通 review 多一級 CRITICAL。
+- **Status**: ADDED
+
+### R12: Ask 檔案 Context 判斷
+- **Level**: SHOULD
+- **Description**: /gemini:ask 的參數中，最後一個 token 若為既有檔案路徑則讀取為 context，其餘為問題文字。
+- **Status**: ADDED
+
+### R13: 零程式碼延續
+- **Level**: MUST
+- **Description**: Phase 2 延續零程式碼架構，所有新 command 以 Markdown 實作，不引入 JS。
+- **Status**: ADDED
