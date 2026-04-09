@@ -79,6 +79,16 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 - **Rationale**: Phase 1 簡單場景不需要程式化錯誤處理，之後專案長大再考慮
 - **Date**: 2026-04-09
 
+### D3: Verdict 值域
+- **Decision**: PASS / NEEDS_CHANGES / CRITICAL 三級
+- **Rationale**: PASS 對應無問題或僅 LOW，NEEDS_CHANGES 對應 MEDIUM，CRITICAL 對應 HIGH，與 severity 直接對應便於未來 Review Gate 自動化判斷
+- **Date**: 2026-04-09
+
+### D4: 預設使用 Gemini Pro 模型
+- **Decision**: review command 硬編碼 `-m pro`
+- **Rationale**: review 場景品質優先，pro 模型推理能力最強。Phase 2 的 /gemini:config 再開放模型切換
+- **Date**: 2026-04-09
+
 ## Pending Changes
 
 <!-- Brownfield delta 放這裡，dev-finish spec sync 時清除 -->
