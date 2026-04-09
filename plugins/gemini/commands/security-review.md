@@ -39,7 +39,7 @@ Determine the absolute path to the system prompt file:
 Run the following bash command, passing REVIEW_INPUT via stdin:
 
 ```bash
-echo "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -o text -m $MODEL
+printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -o text -m $MODEL
 ```
 
 Note: We pipe input via stdin instead of -p flag to handle large diffs and special characters safely.
