@@ -9,13 +9,13 @@ Perform a code review using Gemini CLI. This gives you a second opinion from a d
 ## Step 1: Determine input
 
 If $ARGUMENTS is provided:
-- Treat it as a file path or glob pattern
-- Read the file contents using the Read tool
-- Store as REVIEW_INPUT
+- If it contains glob characters (* or ?), use the Glob tool to expand it, then Read each matched file
+- Otherwise, Read the single file directly
+- Concatenate all file contents as REVIEW_INPUT
 
 If $ARGUMENTS is empty:
-- Run: `git diff HEAD`
-- If the diff is empty, also try: `git diff --cached`
+- Run: `git diff HEAD 2>/dev/null`
+- If the command fails (e.g., no commits yet) or the diff is empty, also try: `git diff --cached`
 - If still empty, tell the user: "No changes found. Provide a file path or make some changes first."
 - Store the diff output as REVIEW_INPUT
 
