@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "gemini-plugin-cc",
+  "version": "0.1.0",
+  "description": "Gemini CLI integration for Claude Code",
+  "owner": {
+    "name": "Frank Chen"
+  },
+  "plugins": [
+    {
+      "name": "gemini",
+      "description": "Get a second opinion from Gemini on your code reviews",
+      "version": "0.1.0",
+      "author": {
+        "name": "Frank Chen"
+      },
+      "source": ".",
+      "category": "development"
+    }
+  ]
+}
