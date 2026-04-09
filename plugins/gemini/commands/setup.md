@@ -10,7 +10,7 @@ Run the following checks in order and report the results:
 Run: `which gemini || where gemini 2>/dev/null`
 
 - If found: report the path
-- If not found: tell the user to install it with `npm install -g @anthropic-ai/gemini-cli` or visit https://github.com/google-gemini/gemini-cli
+- If not found: tell the user to install it with `npm install -g @google/gemini-cli` or visit https://github.com/google-gemini/gemini-cli
 
 ## 2. Check Gemini CLI version
 
