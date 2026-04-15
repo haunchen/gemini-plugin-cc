@@ -1,0 +1,113 @@
+description: "Gemini CLI review system prompt eval"
+
+providers:
+  - id: "exec: ./run-gemini-default.sh"
+    label: "gemini-default"
+  - id: "exec: ./run-gemini.sh"
+    label: "gemini-custom-review"
+
+prompts:
+  - "Review the following code diff for bugs, security issues, and code quality problems:\n\n{{diff}}"
+
+defaultTest:
+  options:
+    provider:
+      id: anthropic:messages:claude-sonnet-4-20250514
+      config:
+        apiKeyRequired: false
+
+tests:
+  # Test Case 1: 真 Bug — Discord snowflake 過濾失敗
+  # isNaN(Number(key)) 無法過濾 18-19 位 snowflake（不回 NaN 但超過 MAX_SAFE_INTEGER）
+  # 期望：找到這個 bug
+  - vars:
+      diff: "file://test-cases/snowflake-filter.diff"
+    assert:
+      - type: icontains
+        value: "MAX_SAFE_INTEGER"
+      - type: llm-rubric
+        value: "The review correctly identifies a numeric precision bug: isNaN(Number(key)) fails to filter 18-19 digit Discord snowflake IDs because Number() returns a finite but imprecise value instead of NaN when the integer exceeds Number.MAX_SAFE_INTEGER. The review should explain why this is a real bug and suggest a fix."
+
+  # Test Case 2: 乾淨程式碼 — 移除多餘 any annotation
+  # (m: any) → (m)，TypeScript 能自動推導
+  # 期望：不應報 bug，頂多 style/info。報成 bug 或 security issue 就是 false positive
+  - vars:
+      diff: "file://test-cases/remove-any.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should recognize this is a clean, safe change that removes unnecessary TypeScript 'any' type annotations where type inference is sufficient. It should NOT report any bugs, security issues, or critical problems. Minor style suggestions are acceptable. Escalating this to a bug or security vulnerability is a false positive and should fail."
+
+  # Test Case 3: 模糊地帶 — prompt engineering 改善
+  # Haiku 生成標題出簡體中文、URL 回「無法存取」，修復是重寫 prompt
+  # 期望：不應當成安全漏洞或邏輯 bug
+  - vars:
+      diff: "file://test-cases/prompt-rewrite.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should treat this as a prompt engineering improvement (fixing language output and URL handling), NOT a security vulnerability or critical bug. Constructive feedback about the prompt changes is welcome. Escalating to security issues (SQL injection, XSS, RCE) or critical bugs is inappropriate and should fail."
+      - type: javascript
+        value: "return output.length > 50;"
+
+  # Test Case 4: 真 Bug — 安全類：FFmpeg 檔名注入 + 缺少 HTTP 安全標頭
+  # user-supplied filename 未經清理直接傳給 FFmpeg，特殊字元可能導致指令注入
+  # 期望：識別出檔名清理是安全修復，認可 HTTP 安全標頭的添加
+  - vars:
+      diff: "file://test-cases/security-filename-injection.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should recognize this commit addresses real security concerns: (1) user-supplied filenames were passed unsanitized to FFmpeg commands, and the new sanitizeFileName() function mitigates command injection via special characters; (2) missing HTTP security headers (CSP, HSTS, X-Frame-Options, etc.) are now added. The review should acknowledge these as legitimate security improvements, not dismiss them as unnecessary."
+
+  # Test Case 5: 真 Bug — 邏輯類：Python 屬性遮蔽同名方法
+  # self.update = update 把 Telegram Update 物件存為實例屬性，遮蔽了 update() 方法
+  # 期望：識別出 name shadowing 問題及修復
+  - vars:
+      diff: "file://test-cases/attribute-shadowing.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should identify the core bug: storing the Telegram Update object as self.update shadows the class's update() method, causing runtime crashes when pm.update('text') is called. The fix (renaming to self._update) correctly resolves the name collision. The added try/except in __aexit__ is a secondary defensive improvement. The review should recognize both changes as correct fixes."
+
+  # Test Case 6: 乾淨重構 — 驗證報告 display logic 重構
+  # 將問題按嚴重程度分組顯示（error/warning/info），並限制 warning 和 info 的顯示數量
+  # 期望：認可為合理重構，不應報 bug
+  - vars:
+      diff: "file://test-cases/refactor-display-logic.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should recognize this as a clean refactoring of display/output logic: grouping issues by severity (error > warning > info) and adding display limits (show first 10). This improves readability without changing core validation logic. The embed syntax skip (@-prefix check) is a minor feature addition. The review should NOT report bugs or security issues. Style suggestions are acceptable."
+
+  # Test Case 7: 乾淨 — 依賴升級
+  # Agent SDK 0.2.23 → 0.2.104，MCP SDK 1.26.0 → 1.29.0
+  # 期望：認可為正常依賴升級，不應報 bug 或安全問題
+  - vars:
+      diff: "file://test-cases/deps-upgrade-agent-sdk.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should recognize this as a routine dependency upgrade (Agent SDK 0.2.23 to 0.2.104, MCP SDK 1.26.0 to 1.29.0). It should NOT fabricate bugs, security vulnerabilities, or breaking changes that aren't evident in the diff. Suggesting to check changelogs or run tests is acceptable, but reporting imaginary issues is a false positive."
+
+  # Test Case 8: 模糊地帶 — 效能：CI 記憶體優化 + SheetJS CDN 修復
+  # 3 個 GitHub Actions workflow 加 NODE_OPTIONS 記憶體上限，package.json 加 xlsx override
+  # 期望：不應報成 bug，可以提建議但不應升級嚴重性
+  - vars:
+      diff: "file://test-cases/ci-memory-optimization.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should treat this as a CI/build configuration improvement: adding NODE_OPTIONS memory limits to GitHub Actions workflows and overriding xlsx to a specific version. These are operational/performance changes, NOT bugs or security vulnerabilities. The reviewer may suggest improvements (e.g., documenting why the override is needed) but should NOT escalate to critical issues."
+
+  # Test Case 9: 風格偏好 — App 更名（Battery Guardian → Battery Monitor）
+  # 純命名變更：AndroidManifest、Dart class、pubspec.yaml
+  # 期望：認可為純 cosmetic 改動，不應報 bug 或安全問題
+  - vars:
+      diff: "file://test-cases/app-rename.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should recognize this as a pure naming/branding change: renaming 'Battery Guardian' to 'Battery Monitor' across AndroidManifest.xml, Dart source, and pubspec.yaml. There are zero logic changes. The review should NOT report any bugs, security issues, or functional concerns. At most, it may note that a full-project rename typically touches more files."
+
+  # Test Case 10: 大 Diff — 5 項 incidental findings 修復（3 檔案）
+  # type assertion 改善、parseWebSearchSources 重複呼叫修復、RegExp 特殊字元跳脫、
+  # detectBaseBranch 抽共用、child_process 改靜態 import
+  # 期望：從多個改動中識別出每項修復的意義，特別是 RegExp 跳脫（安全相關）
+  - vars:
+      diff: "file://test-cases/incidental-findings.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should identify multiple distinct improvements in this multi-file diff: (1) replacing 'as any' with proper type assertions, (2) fixing repeated parseWebSearchSources() calls by computing once and sharing, (3) escaping RegExp special characters in command names to prevent regex injection, (4) replacing duplicated base branch detection with a shared detectBaseBranch() utility, (5) converting dynamic imports to static imports for child_process. The RegExp escaping fix (#3) is the most security-relevant. The review should recognize at least 3 of these 5 improvements."

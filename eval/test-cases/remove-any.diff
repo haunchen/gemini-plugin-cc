@@ -1,0 +1,13 @@
+diff --git a/backend_ts/src/bootstrap/multi-agent.ts b/backend_ts/src/bootstrap/multi-agent.ts
+index 71ba2b0..c4c9ff6 100644
+--- a/backend_ts/src/bootstrap/multi-agent.ts
++++ b/backend_ts/src/bootstrap/multi-agent.ts
+@@ -414,7 +414,7 @@ export async function startMultiAgentMode(
+   // helper
+   const getLastDigest = (hdl: AgentHandler, sessionKey: string) => {
+     const msgs = hdl.getRecentMessages(sessionKey, 1);
+-    const lastAssistant = msgs.find((m: any) => m.role === "assistant");
++    const lastAssistant = msgs.find((m) => m.role === "assistant");
+     return lastAssistant ? parseDigest(lastAssistant.content) : null;
+   };
+ 

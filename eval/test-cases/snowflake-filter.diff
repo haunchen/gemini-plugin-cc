@@ -1,0 +1,20 @@
+diff --git a/backend_ts/src/handlers/agent.ts b/backend_ts/src/handlers/agent.ts
+index a644146..852f9aa 100644
+--- a/backend_ts/src/handlers/agent.ts
++++ b/backend_ts/src/handlers/agent.ts
+@@ -428,10 +428,12 @@ export class AgentHandler {
+     if (!bot) return;
+     const keys = this.sessionManager.getActiveSessionKeys();
+     for (const key of keys) {
+-      // 只通知 Telegram userId（純數字）；Discord threadId 是 snowflake 字串，跳過
+-      if (isNaN(Number(key))) continue;
++      // 只通知 Telegram userId（純數字，在安全整數範圍內）
++      // Discord snowflake 是 18-19 位純數字，Number() 不會 NaN 但會超過 MAX_SAFE_INTEGER
++      const numKey = Number(key);
++      if (!Number.isSafeInteger(numKey)) continue;
+       try {
+-        await bot.api.sendMessage(Number(key), "Bot 已重啟，對話已恢復，可以繼續聊天。");
++        await bot.api.sendMessage(numKey, "Bot 已重啟，對話已恢復，可以繼續聊天。");
+       } catch (err) {
+         console.error(`Failed to send restart notification to ${key}:`, err);
+       }

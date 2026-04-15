@@ -1,0 +1,16 @@
+diff --git a/backend_ts/package.json b/backend_ts/package.json
+--- a/backend_ts/package.json
++++ b/backend_ts/package.json
+@@ -9,10 +9,10 @@
+     "test:run": "bun test"
+   },
+   "dependencies": {
+-    "@anthropic-ai/claude-agent-sdk": "^0.2.23",
++    "@anthropic-ai/claude-agent-sdk": "^0.2.104",
+     "@anthropic-ai/sdk": "^0.71.2",
+     "@grammyjs/runner": "^2.0.3",
+-    "@modelcontextprotocol/sdk": "^1.26.0",
++    "@modelcontextprotocol/sdk": "^1.29.0",
+     "croner": "^10.0.1",
+     "discord.js": "^14.26.2",
+     "dotenv": "^16.5.0",

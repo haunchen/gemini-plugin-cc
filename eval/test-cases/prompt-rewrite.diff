@@ -1,0 +1,41 @@
+diff --git a/backend_ts/src/discord/thread-manager.ts b/backend_ts/src/discord/thread-manager.ts
+index c1bb6bd..e863f5f 100644
+--- a/backend_ts/src/discord/thread-manager.ts
++++ b/backend_ts/src/discord/thread-manager.ts
+@@ -28,8 +28,35 @@ export class ThreadManager {
+    */
+   async generateTitle(text: string): Promise<string> {
+     try {
++      const snippet = text.slice(0, 200);
+       const q = query({
+-        prompt: `從以下訊息生成一個簡短的對話標題（10字以內，繁體中文，不要加引號或標點）：\n\n${text.slice(0, 200)}`,
++        prompt: [
++          "你是標題產生器。根據使用者訊息產出一個繁體中文標題（10 字以內）。",
++          "規則：",
++          "- 只輸出標題，不要任何解釋或標點符號",
++          "- 一律使用繁體中文（台灣用語），禁止簡體字",
++          "- 如果訊息包含網址連結，根據網址的域名或路徑猜測主題來命名，不要說你無法存取",
++          "- 文章連結請從 URL 的 slug（路徑中的關鍵字）輔助判斷主題",
++          "",
++          "範例：",
++          "訊息：幫我查一下明天天氣",
++          "標題：查詢天氣",
++          "",
++          "訊息：https://github.com/anthropics/claude-code/pull/123",
++          "標題：GitHub PR 討論",
++          "",
++          "訊息：https://www.youtube.com/watch?v=abc123",
++          "標題：YouTube 影片",
++          "",
++          "訊息：https://blog.example.com/posts/react-server-components-guide",
++          "標題：React Server Components",
++          "",
++          "訊息：https://medium.com/@user/why-rust-is-the-future-of-systems-programming-abc123",
++          "標題：Rust 系統程式語言",
++          "",
++          `訊息：${snippet}`,
++          "標題：",
++        ].join("\n"),
+         options: {
+           model: "haiku",
+           tools: [],
