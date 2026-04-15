@@ -42,9 +42,9 @@ tests:
       diff: "file://test-cases/prompt-rewrite.diff"
     assert:
       - type: llm-rubric
-        value: "The review should treat this as a prompt engineering improvement (fixing language output and URL handling), NOT a security vulnerability or critical bug. Constructive feedback about the prompt changes is welcome. Escalating to security issues (SQL injection, XSS, RCE) or critical bugs is inappropriate and should fail."
+        value: "This diff rewrites an LLM prompt for Discord thread title generation. Grade PASS if the review treats this as a normal prompt engineering change — approving it, offering minor suggestions, or reporting no issues are all acceptable. Grade FAIL only if the review escalates this to a security vulnerability (prompt injection, XSS, RCE) or reports critical bugs, because those would be false positives."
       - type: javascript
-        value: "return output.length > 50;"
+        value: "output.length > 50"
 
   # Test Case 4: 真 Bug — 安全類：FFmpeg 檔名注入 + 缺少 HTTP 安全標頭
   # user-supplied filename 未經清理直接傳給 FFmpeg，特殊字元可能導致指令注入
