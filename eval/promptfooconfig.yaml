@@ -24,7 +24,7 @@ tests:
       diff: "file://test-cases/snowflake-filter.diff"
     assert:
       - type: llm-rubric
-        value: "The review correctly identifies a numeric precision bug: isNaN(Number(key)) fails to filter 18-19 digit Discord snowflake IDs because Number() returns a finite but imprecise value instead of NaN when the integer exceeds Number.MAX_SAFE_INTEGER. The review should explain why this is a real bug and suggest a fix."
+        value: "Grade PASS if the review identifies a numeric precision risk with using Number() on large integer ID strings (Discord snowflake IDs are 17-19 digits, exceeding JavaScript's safe integer range). The review may frame this as a bug in the original isNaN approach, a limitation of the new isSafeInteger approach, or a general precision concern — any angle that recognizes the core issue (Number() loses precision on 64-bit integers) is acceptable. Grade FAIL if the review misses the precision issue entirely or reports unrelated problems."
 
   # Test Case 2: 乾淨程式碼 — 移除多餘 any annotation
   # (m: any) → (m)，TypeScript 能自動推導
