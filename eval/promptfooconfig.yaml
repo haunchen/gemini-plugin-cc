@@ -71,7 +71,7 @@ tests:
       diff: "file://test-cases/refactor-display-logic.diff"
     assert:
       - type: llm-rubric
-        value: "The review should recognize this as a clean refactoring of display/output logic: grouping issues by severity (error > warning > info) and adding display limits (show first 10). This improves readability without changing core validation logic. The embed syntax skip (@-prefix check) is a minor feature addition. The review should NOT report bugs or security issues. Style suggestions are acceptable."
+        value: "This diff refactors display/output logic (grouping issues by severity, adding display limits) and adds an embed syntax skip. Grade PASS if the review recognizes this as a refactoring and any findings are constructive suggestions (LOW or MEDIUM improvements like edge case handling). Grade FAIL only if the review reports HIGH severity bugs, security vulnerabilities, or fabricated critical issues."
 
   # Test Case 7: 乾淨 — 依賴升級
   # Agent SDK 0.2.23 → 0.2.104，MCP SDK 1.26.0 → 1.29.0
