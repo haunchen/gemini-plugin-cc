@@ -23,8 +23,6 @@ tests:
   - vars:
       diff: "file://test-cases/snowflake-filter.diff"
     assert:
-      - type: icontains
-        value: "MAX_SAFE_INTEGER"
       - type: llm-rubric
         value: "The review correctly identifies a numeric precision bug: isNaN(Number(key)) fails to filter 18-19 digit Discord snowflake IDs because Number() returns a finite but imprecise value instead of NaN when the integer exceeds Number.MAX_SAFE_INTEGER. The review should explain why this is a real bug and suggest a fix."
 

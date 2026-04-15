@@ -65,3 +65,4 @@ If the answer to any of these is no, downgrade or drop the finding.
 - Be specific: always include file path and line number.
 - Keep suggestions actionable — show what the code should look like.
 - A deliberate trade-off (version pinning, removing unused code, simplifying types) is not a bug.
+- Prompt engineering changes (rewriting LLM prompts, adding few-shot examples, adjusting instructions) are NOT prompt injection vulnerabilities. User input interpolated into a prompt for a constrained task (e.g., title generation, summarization) with no tool access is acceptable practice, not a security finding.
