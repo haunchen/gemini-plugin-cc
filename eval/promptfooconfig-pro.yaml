@@ -1,0 +1,80 @@
+description: "Gemini CLI review — Pro model comparison"
+
+providers:
+  - id: "exec: ./run-gemini-default-pro.sh"
+    label: "gemini-pro-default"
+  - id: "exec: ./run-gemini-pro.sh"
+    label: "gemini-pro-custom"
+
+prompts:
+  - "Review the following code diff for bugs, security issues, and code quality problems:\n\n{{diff}}"
+
+defaultTest:
+  options:
+    provider:
+      id: anthropic:messages:claude-sonnet-4-20250514
+      config:
+        apiKeyRequired: false
+
+tests:
+  - vars:
+      diff: "file://test-cases/snowflake-filter.diff"
+    assert:
+      - type: llm-rubric
+        value: "Grade PASS if the review identifies a numeric precision risk with using Number() on large integer ID strings (Discord snowflake IDs are 17-19 digits, exceeding JavaScript's safe integer range). The review may frame this as a bug in the original isNaN approach, a limitation of the new isSafeInteger approach, or a general precision concern — any angle that recognizes the core issue (Number() loses precision on 64-bit integers) is acceptable. Grade FAIL if the review misses the precision issue entirely or reports unrelated problems."
+
+  - vars:
+      diff: "file://test-cases/remove-any.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should recognize this is a clean, safe change that removes unnecessary TypeScript 'any' type annotations where type inference is sufficient. It should NOT report any bugs, security issues, or critical problems. Minor style suggestions are acceptable. Escalating this to a bug or security vulnerability is a false positive and should fail."
+
+  - vars:
+      diff: "file://test-cases/prompt-rewrite.diff"
+    assert:
+      - type: llm-rubric
+        value: "This diff rewrites an LLM prompt for Discord thread title generation. Grade PASS if the review treats this as a normal prompt engineering change — approving it, offering minor suggestions, or reporting no issues are all acceptable. Grade FAIL only if the review escalates this to a security vulnerability (prompt injection, XSS, RCE) or reports critical bugs, because those would be false positives."
+      - type: javascript
+        value: "output.length > 50"
+
+  - vars:
+      diff: "file://test-cases/security-filename-injection.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should recognize this commit addresses real security concerns: (1) user-supplied filenames were passed unsanitized to FFmpeg commands, and the new sanitizeFileName() function mitigates command injection via special characters; (2) missing HTTP security headers (CSP, HSTS, X-Frame-Options, etc.) are now added. The review should acknowledge these as legitimate security improvements, not dismiss them as unnecessary."
+
+  - vars:
+      diff: "file://test-cases/attribute-shadowing.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should identify the core bug: storing the Telegram Update object as self.update shadows the class's update() method, causing runtime crashes when pm.update('text') is called. The fix (renaming to self._update) correctly resolves the name collision. The added try/except in __aexit__ is a secondary defensive improvement. The review should recognize both changes as correct fixes."
+
+  - vars:
+      diff: "file://test-cases/refactor-display-logic.diff"
+    assert:
+      - type: llm-rubric
+        value: "This diff refactors display/output logic (grouping issues by severity, adding display limits) and adds an embed syntax skip. Grade PASS if the review recognizes this as a refactoring and any findings are constructive suggestions (LOW or MEDIUM improvements like edge case handling). Grade FAIL only if the review reports HIGH severity bugs, security vulnerabilities, or fabricated critical issues."
+
+  - vars:
+      diff: "file://test-cases/deps-upgrade-agent-sdk.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should recognize this as a routine dependency upgrade (Agent SDK 0.2.23 to 0.2.104, MCP SDK 1.26.0 to 1.29.0). It should NOT fabricate bugs, security vulnerabilities, or breaking changes that aren't evident in the diff. Suggesting to check changelogs or run tests is acceptable, but reporting imaginary issues is a false positive."
+
+  - vars:
+      diff: "file://test-cases/ci-memory-optimization.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should treat this as a CI/build configuration improvement: adding NODE_OPTIONS memory limits to GitHub Actions workflows and overriding xlsx to a specific version. These are operational/performance changes, NOT bugs or security vulnerabilities. The reviewer may suggest improvements (e.g., documenting why the override is needed) but should NOT escalate to critical issues."
+
+  - vars:
+      diff: "file://test-cases/app-rename.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should recognize this as a pure naming/branding change: renaming 'Battery Guardian' to 'Battery Monitor' across AndroidManifest.xml, Dart source, and pubspec.yaml. There are zero logic changes. The review should NOT report any bugs, security issues, or functional concerns. At most, it may note that a full-project rename typically touches more files."
+
+  - vars:
+      diff: "file://test-cases/incidental-findings.diff"
+    assert:
+      - type: llm-rubric
+        value: "The review should identify multiple distinct improvements in this multi-file diff: (1) replacing 'as any' with proper type assertions, (2) fixing repeated parseWebSearchSources() calls by computing once and sharing, (3) escaping RegExp special characters in command names to prevent regex injection, (4) replacing duplicated base branch detection with a shared detectBaseBranch() utility, (5) converting dynamic imports to static imports for child_process. The RegExp escaping fix (#3) is the most security-relevant. The review should recognize at least 3 of these 5 improvements."
