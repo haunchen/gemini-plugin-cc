@@ -10,7 +10,7 @@ Get a devil's advocate review using Gemini CLI. Instead of finding bugs, this ch
 
 Check if $ARGUMENTS contains `--model <value>`:
 - If yes: extract the value as MODEL, remove `--model <value>` from $ARGUMENTS
-- If no: set MODEL = flash
+- If no: set MODEL = pro
 
 Valid model values: flash, pro, flash-lite, or any full model name.
 
@@ -39,10 +39,16 @@ Determine the absolute path to the system prompt file:
 Run the following bash command, passing REVIEW_INPUT via stdin:
 
 ```bash
-printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -o text -m $MODEL
+output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -o text -m $MODEL 2>&1)
+exit_code=$?
+if [ $exit_code -ne 0 ] && echo "$output" | grep -qi "429\|quota\|RESOURCE_EXHAUSTED\|rate limit\|overloaded"; then
+  echo "[Fallback] $MODEL unavailable (quota/rate limit), retrying with flash..." >&2
+  output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -o text -m flash 2>&1)
+fi
+echo "$output"
 ```
 
-Note: We pipe input via stdin instead of -p flag to handle large diffs and special characters safely.
+Note: We pipe input via stdin instead of -p flag to handle large diffs and special characters safely. If the preferred model hits quota limits, it automatically falls back to flash.
 
 ## Step 5: Present results
 
