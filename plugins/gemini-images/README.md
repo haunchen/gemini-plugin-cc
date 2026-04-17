@@ -38,7 +38,8 @@ Sister plugin `gemini` provides slash commands (`/gemini:review`, `/gemini:ask`,
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview)
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli)
-- Git Bash (provides `bash`, `jq` built-in)
+- Git Bash (provides `bash`)
+- `jq`: download from https://jqlang.github.io/jq/download/ or `winget install jqlang.jq`
 - Node.js
 - **Optional**: `winget install ImageMagick.ImageMagick UB-Mannheim.TesseractOCR`
 
@@ -55,7 +56,7 @@ Restart Claude Code after installation.
 
 ## Verification
 
-Run the diagnostic:
+Run the diagnostic from the repository root:
 
 ```bash
 bash plugins/gemini-images/scripts/doctor.sh
