@@ -25,11 +25,11 @@ TIMESTAMP=$(date +%s)
 MAX_WIDTH="${MAX_WIDTH:-1568}"
 OCR_BIN="${OCR_BIN:-tesseract}"
 
-DESC_FILE=$(mktemp "${TMP_DIR%/}/claude-image-desc-${TIMESTAMP}-XXXXXX.txt")
+DESC_FILE=$(mktemp "${TMP_DIR%/}/claude-image-desc-${TIMESTAMP}-XXXXXX")
 WORK_FILE="$FILE_PATH"
 RESIZED_FILE="$WORK_FILE"
-OCR_FILE=$(mktemp "${TMP_DIR%/}/claude-image-ocr-${TIMESTAMP}-XXXXXX.txt")
-GEMINI_FILE=$(mktemp "${TMP_DIR%/}/claude-image-gemini-${TIMESTAMP}-XXXXXX.txt")
+OCR_FILE=$(mktemp "${TMP_DIR%/}/claude-image-ocr-${TIMESTAMP}-XXXXXX")
+GEMINI_FILE=$(mktemp "${TMP_DIR%/}/claude-image-gemini-${TIMESTAMP}-XXXXXX")
 
 cleanup() {
   rm -f "$OCR_FILE" "$GEMINI_FILE" 2>/dev/null || true
@@ -46,7 +46,9 @@ convert_if_needed() {
   case "${FILE_PATH##*.}" in
     avif|AVIF|bmp|BMP|tiff|tif|TIFF|TIF)
       local converted
-      converted=$(mktemp "${TMP_DIR%/}/claude-image-convert-${TIMESTAMP}-XXXXXX.jpg")
+      converted=$(mktemp "${TMP_DIR%/}/claude-image-convert-${TIMESTAMP}-XXXXXX")
+      mv "$converted" "${converted}.jpg"
+      converted="${converted}.jpg"
       if command -v magick >/dev/null 2>&1; then
         if magick "$FILE_PATH" "$converted" >/dev/null 2>&1; then
           WORK_FILE="$converted"
@@ -66,7 +68,9 @@ convert_if_needed() {
 
 resize_if_needed() {
   local resized
-  resized=$(mktemp "${TMP_DIR%/}/claude-image-resize-${TIMESTAMP}-XXXXXX.jpg")
+  resized=$(mktemp "${TMP_DIR%/}/claude-image-resize-${TIMESTAMP}-XXXXXX")
+  mv "$resized" "${resized}.jpg"
+  resized="${resized}.jpg"
 
   if command -v magick >/dev/null 2>&1; then
     local width
