@@ -27,7 +27,7 @@ Plugin-specific extra dependencies are listed in each plugin's README.
 /plugin install gemini-images
 ```
 
-Restart Claude Code after installation. Omit `/plugin install gemini-images` if you only need code review commands.
+Restart Claude Code after installation.
 
 For `gemini`, run `/gemini:setup` to verify.
 For `gemini-images`, run `bash plugins/gemini-images/scripts/doctor.sh` to verify.
