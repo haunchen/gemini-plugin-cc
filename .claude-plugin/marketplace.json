@@ -13,6 +13,16 @@
       },
       "source": "./plugins/gemini",
       "category": "development"
+    },
+    {
+      "name": "gemini-images",
+      "description": "Intercept Read on image files and replace with Gemini text descriptions to protect prompt cache",
+      "version": "0.1.0",
+      "author": {
+        "name": "Frank Chen"
+      },
+      "source": "./plugins/gemini-images",
+      "category": "development"
     }
   ]
 }
