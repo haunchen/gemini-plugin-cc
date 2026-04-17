@@ -1,0 +1,20 @@
+{
+  "name": "gemini-images",
+  "version": "0.1.0",
+  "description": "Intercept Claude Code Read on image files and replace with Gemini-generated text descriptions to avoid prompt cache invalidation",
+  "author": {
+    "name": "Frank Chen"
+  },
+  "repository": "https://github.com/haunchen/gemini-plugin-cc",
+  "license": "MIT",
+  "keywords": ["gemini", "image", "ocr", "prompt-cache", "hook"],
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Read",
+      "hooks": [{
+        "type": "command",
+        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/intercept-image-read.sh"
+      }]
+    }]
+  }
+}
