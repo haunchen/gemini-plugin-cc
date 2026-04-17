@@ -17,7 +17,7 @@ const systemPromptPath = resolve(__dirname, "../system-prompts/image-describe.md
 
 const prompt = `Read this image: @${imagePath}`;
 
-const args = ["-m", geminiModel, "-o", "text", "-p", prompt];
+const args = ["-m", geminiModel, "-p", prompt];
 
 const result = spawnSync(geminiBin, args, {
   encoding: "utf8",
