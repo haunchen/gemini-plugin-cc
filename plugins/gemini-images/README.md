@@ -1,0 +1,102 @@
+# gemini-images
+
+A Claude Code plugin that intercepts `Read` calls on image files and replaces them with Gemini-generated text descriptions, preventing image bytes from invalidating Anthropic's prompt cache.
+
+## What & Why
+
+Anthropic's prompt cache is invalidated when inline images change in a prompt ([docs](https://docs.claude.com/en/docs/build-with-claude/prompt-caching)). In a long Claude Code session, every screenshot or diagram you ask Claude to read silently blows away your cache hit rate — and your wallet.
+
+This plugin hooks into `PreToolUse` for the `Read` tool, detects image files by extension, and calls Gemini CLI to produce a compact text description. Claude receives the description instead of the image, the cache stays warm, and you still get the information.
+
+## How It Works
+
+```
+Claude Code
+  Read(image.png) ──► PreToolUse hook
+                        │
+                        ├── resize (magick → sips → skip)
+                        ├── spawn Gemini CLI with GEMINI_SYSTEM_MD
+                        └── parallel: tesseract OCR
+                        │
+                        └──► updatedInput.file_path = desc.txt
+                             Claude reads text, not image
+```
+
+Sister plugin `gemini` provides slash commands (`/gemini:review`, `/gemini:ask`, etc.) and shares the same Gemini CLI OAuth credentials — install whichever ones you want.
+
+## Prerequisites
+
+### macOS
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview)
+- [Gemini CLI](https://github.com/google-gemini/gemini-cli): `npm install -g @google/gemini-cli`
+- `jq`: `brew install jq`
+- Node.js (bundled with Gemini CLI's install)
+- **Optional**: `brew install imagemagick tesseract tesseract-lang`
+
+### Windows (Git Bash)
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview)
+- [Gemini CLI](https://github.com/google-gemini/gemini-cli)
+- Git Bash (provides `bash`, `jq` built-in)
+- Node.js
+- **Optional**: `winget install ImageMagick.ImageMagick UB-Mannheim.TesseractOCR`
+
+Linux is not supported.
+
+## Installation
+
+```
+/plugin marketplace add https://github.com/haunchen/gemini-plugin-cc
+/plugin install gemini-images
+```
+
+Restart Claude Code after installation.
+
+## Verification
+
+Run the diagnostic:
+
+```bash
+bash plugins/gemini-images/scripts/doctor.sh
+```
+
+Required checks must all pass. Optional warnings are fine for basic use but reduce quality.
+
+## Configuration
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `GEMINI_MODEL` | `flash` | Model passed to Gemini CLI `-m` |
+| `MAX_WIDTH` | `1568` | Resize ceiling (pixels) |
+| `OCR_BIN` | `tesseract` | OCR binary; set to `none` to disable |
+| `GEMINI_BIN` | `gemini` | Gemini CLI binary name |
+
+Set these in your shell profile or per-session before launching Claude Code.
+
+## Troubleshooting
+
+**Hook runs but Claude still sees images**
+Confirm the plugin is loaded: `/plugin list` should show `gemini-images`. Restart Claude Code after install.
+
+**Gemini CLI fails with OAuth error**
+Run `gemini` interactively once to complete Google OAuth.
+
+**Chinese text missing from OCR**
+Install `chi_tra` language pack: `brew install tesseract-lang` (macOS) or download from UB-Mannheim GitHub releases (Windows).
+
+**Large images time out**
+Install ImageMagick to enable resize. Without resize, Gemini receives the original image and may hit token limits.
+
+## Uninstall
+
+```
+/plugin uninstall gemini-images
+```
+
+## Limitations
+
+- Engineering drawings lose fine-grained detail at 300-character output limits.
+- Handwriting recognition is unreliable (both Gemini and tesseract).
+- Hook failure silently passes through to original image Read — check stderr for warnings.
+- No per-image opt-out; uninstall if you need to keep specific images intact.
