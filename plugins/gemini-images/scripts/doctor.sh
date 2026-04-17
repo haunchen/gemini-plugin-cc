@@ -18,7 +18,6 @@ STATUS=0
 ok()   { echo "[OK]   $1"; }
 fail() { echo "[FAIL] $1"; STATUS=1; }
 warn() { echo "[WARN] $1"; }
-skip() { echo "[SKIP] $1"; }
 
 check_required_cmd() {
   if command -v "$1" >/dev/null 2>&1; then
@@ -86,7 +85,7 @@ if [ "$VERBOSE" = "1" ]; then
   echo "TMPDIR: ${TMPDIR:-/tmp (default)}"
   echo "OS: $(uname -s)"
   if command -v gemini >/dev/null 2>&1; then
-    echo "gemini version: $(gemini --version 2>&1 | head -1)"
+    echo "gemini version: $(gemini --version 2>/dev/null | head -1)"
   fi
   if command -v node >/dev/null 2>&1; then
     echo "node version: $(node --version)"
