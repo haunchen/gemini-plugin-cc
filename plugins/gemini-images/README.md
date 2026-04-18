@@ -103,6 +103,7 @@ Install ImageMagick to enable resize. Without resize, Gemini receives the origin
 
 ## Limitations
 
+- **Only intercepts explicit `Read` tool calls.** Images pasted or dragged directly into the chat arrive as message content blocks and bypass this hook. Claude Code's hook system does not currently expose those attachments — `UserPromptSubmit` only sees the prompt text, never the image content. The plugin therefore protects prompt cache for agent-driven `Read(image.png)` flows, not for images you attach to a user message.
 - Engineering drawings lose fine-grained detail at 300-character output limits.
 - Handwriting recognition is unreliable (both Gemini and tesseract).
 - Hook failure silently passes through to original image Read — check stderr for warnings.
