@@ -16,7 +16,12 @@ const geminiModel = process.env.GEMINI_MODEL || "flash";
 const systemPromptPath = resolve(__dirname, "../system-prompts/image-describe.md");
 const imageDir = dirname(imagePath);
 
-const prompt = `Read this image: @${imagePath}`;
+// Escape spaces per gemini CLI docs: "@My\ Documents/file.txt". Without
+// escaping, AT_COMMAND_PATH_REGEX truncates at the first space and falls
+// back to plain-text parsing; the model usually recovers, but we shouldn't
+// rely on that implicit retry when one replace fixes it deterministically.
+const escapedPath = imagePath.replace(/ /g, "\\ ");
+const prompt = `Read this image: @${escapedPath}`;
 
 // Gemini CLI sandboxes @<path> to its workspace (cwd + temp). Include the
 // image's dir so it can load files from ~/.claude/image-cache/ or anywhere

@@ -161,10 +161,10 @@ fi
   fi
 } > "$DESC_FILE"
 
-jq -n --arg path "$DESC_FILE" '{
+printf '%s' "$INPUT" | jq --arg path "$DESC_FILE" '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
-    updatedInput: { file_path: $path },
+    updatedInput: (.tool_input + { file_path: $path }),
     additionalContext: "The image was converted into a text description before entering the main session to reduce Claude cache churn."
   }
 }'
