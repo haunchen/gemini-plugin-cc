@@ -1,6 +1,6 @@
 ---
 domain: gemini-images
-status: draft
+status: active
 created: 2026-04-18
 last_modified: 2026-04-18
 ---
