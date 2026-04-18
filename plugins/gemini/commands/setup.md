@@ -34,7 +34,7 @@ Run: `test -f ~/.gemini/oauth_creds.json && echo "OAuth credentials found" || ec
 
 ## 4. Test model availability
 
-Run: `echo "ping" | gemini -o text -m $MODEL`
+Run: `echo "ping" | gemini -m $MODEL`
 
 - If the command succeeds: report that the model is available
 - If the command fails with a model error: report the error and suggest trying a different model

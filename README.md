@@ -1,43 +1,44 @@
 # gemini-plugin-cc
 
-A [Claude Code plugin](https://docs.anthropic.com/en/docs/claude-code/plugins) that calls [Gemini CLI](https://github.com/google-gemini/gemini-cli) to give you a second opinion on code reviews.
+A marketplace of [Claude Code plugins](https://docs.anthropic.com/en/docs/claude-code/plugins) that integrate [Gemini CLI](https://github.com/google-gemini/gemini-cli) — get a second opinion on code, and keep your prompt cache warm while reading images.
 
-Zero-code plugin — pure Markdown commands, no JavaScript required.
+## Plugins
+
+| Plugin | Purpose | Triggers |
+|--------|---------|----------|
+| [`gemini`](plugins/gemini/) | Slash commands for code review, ask, adversarial review, security review | `/gemini:*` |
+| [`gemini-images`](plugins/gemini-images/) | PreToolUse hook that converts image Reads into text descriptions to protect prompt cache | Automatic on `Read` image files |
+
+Both plugins share the same Gemini CLI OAuth credentials. Install one or both.
 
 ## Prerequisites
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) installed
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli) installed (`npm install -g @google/gemini-cli`)
-- `GEMINI_API_KEY` environment variable set, or authenticated via `gemini` OAuth
+- `GEMINI_API_KEY` environment variable, or authenticated via `gemini` OAuth
+
+Plugin-specific extra dependencies are listed in each plugin's README.
 
 ## Installation
 
-Add this plugin marketplace in Claude Code:
-
 ```
-/install-plugin https://github.com/haunchen/gemini-plugin-cc
+/plugin marketplace add https://github.com/haunchen/gemini-plugin-cc
+/plugin install gemini
+/plugin install gemini-images
 ```
 
-Then run `/gemini:setup` to verify everything is configured.
+Restart Claude Code after installation.
 
-## Commands
+For `gemini`, run `/gemini:setup` to verify.
+For `gemini-images`, run `bash plugins/gemini-images/scripts/doctor.sh` to verify.
 
-### `/gemini:setup`
+## Commands (gemini plugin)
 
-Checks Gemini CLI installation, version, and API key status.
-
-### `/gemini:review [file-path]`
-
-Get a code review from Gemini as a second opinion.
-
-- With argument: reviews the specified file
-- Without argument: reviews `git diff HEAD` (staged + unstaged changes)
-
-Uses a tuned system prompt (`system-prompts/review.md`) to produce structured output:
-
-- **Summary** — one-line overview
-- **Findings** — severity (HIGH/MEDIUM/LOW), location, description, suggestion
-- **Verdict** — PASS / NEEDS_CHANGES / CRITICAL
+- `/gemini:setup` — check CLI, version, OAuth
+- `/gemini:review [path] [--model <m>]` — code review (default model: Pro with Flash fallback)
+- `/gemini:ask <question> [file] [--model <m>]` — free-form technical question
+- `/gemini:adversarial-review [path] [--model <m>]` — devil's advocate design challenge
+- `/gemini:security-review [path] [--model <m>]` — OWASP-focused security review
 
 ## Project Structure
 
@@ -46,27 +47,20 @@ gemini-plugin-cc/
 ├── .claude-plugin/
 │   └── marketplace.json          # Marketplace registry
 ├── plugins/
-│   └── gemini/
-│       ├── .claude-plugin/
-│       │   └── plugin.json       # Plugin manifest
-│       ├── commands/
-│       │   ├── setup.md          # /gemini:setup
-│       │   └── review.md         # /gemini:review
-│       └── system-prompts/
-│           └── review.md         # Review system prompt
+│   ├── gemini/                   # Slash-command plugin
+│   │   ├── .claude-plugin/plugin.json
+│   │   ├── commands/
+│   │   └── system-prompts/
+│   └── gemini-images/            # PreToolUse hook plugin
+│       ├── .claude-plugin/plugin.json
+│       ├── hooks/
+│       ├── system-prompts/
+│       ├── scripts/doctor.sh
+│       └── README.md
 └── docs/
-    ├── plans/                    # Design documents
+    ├── plans/                    # Design + implementation plans
     └── specs/                    # Feature specs
 ```
-
-## How It Works
-
-1. `/gemini:review` collects the diff or file content
-2. Sets `GEMINI_SYSTEM_MD` environment variable pointing to the review system prompt
-3. Pipes input to `gemini -o text -m pro` via stdin
-4. Returns Gemini's response directly
-
-The system prompt is the primary quality lever — it defines the reviewer role, output structure, and severity criteria.
 
 ## License
 

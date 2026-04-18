@@ -39,11 +39,11 @@ Determine the absolute path to the system prompt file:
 Run the following bash command, passing REVIEW_INPUT via stdin to avoid shell escaping issues:
 
 ```bash
-output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -o text -m $MODEL 2>&1)
+output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -m $MODEL 2>&1)
 exit_code=$?
 if [ $exit_code -ne 0 ] && echo "$output" | grep -qi "429\|quota\|RESOURCE_EXHAUSTED\|rate limit\|overloaded"; then
   echo "[Fallback] $MODEL unavailable (quota/rate limit), retrying with flash..." >&2
-  output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -o text -m flash 2>&1)
+  output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -m flash 2>&1)
 fi
 echo "$output"
 ```
