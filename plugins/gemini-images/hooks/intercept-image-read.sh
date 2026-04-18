@@ -24,6 +24,7 @@ TMP_DIR="${TMPDIR:-/tmp}"
 TIMESTAMP=$(date +%s)
 MAX_WIDTH="${MAX_WIDTH:-1568}"
 OCR_BIN="${OCR_BIN:-tesseract}"
+OCR_LANG="${OCR_LANG:-chi_tra+eng}"
 
 DESC_FILE=$(mktemp "${TMP_DIR%/}/claude-image-desc-${TIMESTAMP}-XXXXXX")
 WORK_FILE="$FILE_PATH"
@@ -114,7 +115,12 @@ run_ocr() {
     return 0
   fi
 
-  "$OCR_BIN" "$RESIZED_FILE" stdout 2>/dev/null || true
+  # Prefer OCR_LANG (default chi_tra+eng). If the language pack is missing,
+  # tesseract exits non-zero — fall back to its built-in default so the OCR
+  # path still contributes something rather than silently producing nothing.
+  "$OCR_BIN" "$RESIZED_FILE" stdout -l "$OCR_LANG" 2>/dev/null \
+    || "$OCR_BIN" "$RESIZED_FILE" stdout 2>/dev/null \
+    || true
 }
 
 convert_if_needed

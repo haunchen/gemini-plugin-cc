@@ -32,7 +32,8 @@ Sister plugin `gemini` provides slash commands (`/gemini:review`, `/gemini:ask`,
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli): `npm install -g @google/gemini-cli`
 - `jq`: `brew install jq`
 - Node.js (bundled with Gemini CLI's install)
-- **Optional**: `brew install imagemagick tesseract tesseract-lang`
+- **Strongly recommended** (matches the default `OCR_LANG=chi_tra+eng`): `brew install tesseract tesseract-lang`
+- **Optional**: `brew install imagemagick`
 
 ### Windows (Git Bash)
 
@@ -41,7 +42,8 @@ Sister plugin `gemini` provides slash commands (`/gemini:review`, `/gemini:ask`,
 - Git Bash (provides `bash`)
 - `jq`: download from https://jqlang.github.io/jq/download/ or `winget install jqlang.jq`
 - Node.js
-- **Optional**: `winget install ImageMagick.ImageMagick UB-Mannheim.TesseractOCR`
+- **Strongly recommended** (matches the default `OCR_LANG=chi_tra+eng`): `winget install UB-Mannheim.TesseractOCR` (select Traditional Chinese in the installer)
+- **Optional**: `winget install ImageMagick.ImageMagick`
 
 Linux is not supported.
 
@@ -71,6 +73,7 @@ Required checks must all pass. Optional warnings are fine for basic use but redu
 | `GEMINI_MODEL` | `flash` | Model passed to Gemini CLI `-m` |
 | `MAX_WIDTH` | `1568` | Resize ceiling (pixels) |
 | `OCR_BIN` | `tesseract` | OCR binary; set to `none` to disable |
+| `OCR_LANG` | `chi_tra+eng` | tesseract `-l` value. Falls back to default if the pack is missing. |
 | `GEMINI_BIN` | `gemini` | Gemini CLI binary name |
 
 Set these in your shell profile or per-session before launching Claude Code.
@@ -83,8 +86,11 @@ Confirm the plugin is loaded: `/plugin list` should show `gemini-images`. Restar
 **Gemini CLI fails with OAuth error**
 Run `gemini` interactively once to complete Google OAuth.
 
-**Chinese text missing from OCR**
-Install `chi_tra` language pack: `brew install tesseract-lang` (macOS) or download from UB-Mannheim GitHub releases (Windows).
+**Chinese text missing or garbled in OCR**
+Default `OCR_LANG=chi_tra+eng` needs the `chi_tra` pack. Install via `brew install tesseract-lang` (macOS) or pick Traditional Chinese in UB-Mannheim's Windows installer. Override with e.g. `OCR_LANG=eng` if you don't want Chinese.
+
+**Gemini describes the wrong image / makes up content**
+Usually means Gemini CLI couldn't actually load the file — `-p` mode doesn't always refresh a stale OAuth token. Run `gemini` interactively once to refresh, then retry. The hook already passes `--include-directories <image dir>` so workspace sandboxing shouldn't be the culprit.
 
 **Large images time out**
 Install ImageMagick to enable resize. Without resize, Gemini receives the original image and may hit token limits.

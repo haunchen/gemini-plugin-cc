@@ -14,10 +14,15 @@ if (!imagePath) {
 const geminiBin = process.env.GEMINI_BIN || "gemini";
 const geminiModel = process.env.GEMINI_MODEL || "flash";
 const systemPromptPath = resolve(__dirname, "../system-prompts/image-describe.md");
+const imageDir = dirname(imagePath);
 
 const prompt = `Read this image: @${imagePath}`;
 
-const args = ["-m", geminiModel, "-p", prompt];
+// Gemini CLI sandboxes @<path> to its workspace (cwd + temp). Include the
+// image's dir so it can load files from ~/.claude/image-cache/ or anywhere
+// else Claude Code stores them. Without this, read_file silently fails and
+// Gemini hallucinates a description from the filename alone.
+const args = ["-m", geminiModel, "--include-directories", imageDir, "-p", prompt];
 
 const result = spawnSync(geminiBin, args, {
   encoding: "utf8",
