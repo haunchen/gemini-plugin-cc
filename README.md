@@ -40,6 +40,12 @@ For `gemini-images`, run `bash plugins/gemini-images/scripts/doctor.sh` to verif
 - `/gemini:adversarial-review [path] [--model <m>]` — devil's advocate design challenge
 - `/gemini:security-review [path] [--model <m>]` — OWASP-focused security review
 
+## Security
+
+The `gemini` plugin runs Gemini CLI with a read-only admin policy (`plugins/gemini/policies/readonly.toml`). Only `read_file` and `glob` are allowed; every other tool (including `run_shell_command`, `write_file`, `replace`, `web_fetch`, `web_search`, and any `mcp_*` tool) is denied.
+
+This keeps the review / ask / adversarial-review / security-review commands focused on inspection. If you need Gemini to execute shell commands or modify files, invoke the `gemini` CLI directly instead of going through this plugin.
+
 ## Project Structure
 
 ```
