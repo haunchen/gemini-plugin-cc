@@ -27,23 +27,23 @@ If $ARGUMENTS is empty:
 - If still empty, tell the user: "No changes found. Provide a file path or make some changes first."
 - Store the diff output as REVIEW_INPUT
 
-## Step 3: Locate system prompt
+## Step 3: Locate system prompt and policy
 
-Determine the absolute path to the system prompt file:
-- The file is at `system-prompts/review.md` relative to this plugin's root directory
-- The plugin root is the parent of the `commands/` directory containing this file
-- Store this absolute path as SYSTEM_PROMPT_PATH
+Determine the absolute path to the plugin root (the parent of the `commands/` directory containing this file).
+
+- `system-prompts/review.md` → SYSTEM_PROMPT_PATH
+- `policies/readonly.toml` → POLICY_PATH
 
 ## Step 4: Call Gemini CLI
 
 Run the following bash command, passing REVIEW_INPUT via stdin to avoid shell escaping issues:
 
 ```bash
-output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -m $MODEL 2>&1)
+output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -m $MODEL --admin-policy "$POLICY_PATH" 2>&1)
 exit_code=$?
 if [ $exit_code -ne 0 ] && echo "$output" | grep -qi "429\|quota\|RESOURCE_EXHAUSTED\|rate limit\|overloaded"; then
   echo "[Fallback] $MODEL unavailable (quota/rate limit), retrying with flash..." >&2
-  output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -m flash 2>&1)
+  output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -m flash --admin-policy "$POLICY_PATH" 2>&1)
 fi
 echo "$output"
 ```

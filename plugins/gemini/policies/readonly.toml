@@ -1,0 +1,19 @@
+# Read-only mode for gemini-plugin-cc.
+# Only file reads are allowed when Gemini CLI is invoked by this plugin.
+# Users who need shell/write access should use the gemini CLI directly.
+
+[[rule]]
+toolName = "*"
+decision = "deny"
+priority = 100
+denyMessage = "gemini-plugin-cc enforces read-only mode. Only read_file and glob are allowed."
+
+[[rule]]
+toolName = "read_file"
+decision = "allow"
+priority = 200
+
+[[rule]]
+toolName = "glob"
+decision = "allow"
+priority = 200

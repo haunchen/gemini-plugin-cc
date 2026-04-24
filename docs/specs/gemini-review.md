@@ -2,7 +2,7 @@
 domain: gemini-review
 status: active
 created: 2026-04-09
-last_modified: 2026-04-10
+last_modified: 2026-04-24
 ---
 
 # Gemini Review
@@ -63,6 +63,14 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 - **Level**: MUST
 - **Description**: Phase 2 延續零程式碼架構，所有新 command 以 Markdown 實作，不引入 JS。
 
+### R14: Gemini subprocess tool policy
+- **Level**: MUST
+- **Description**: 四個呼叫 gemini CLI 的 command（review / adversarial-review / security-review / ask）一律透過 `--admin-policy` 傳入 read-only policy，只允許 `read_file` 與 `glob`，其餘工具（`run_shell_command` / `write_file` / `replace` / `web_fetch` / `web_search` / `mcp_*`）全擋。setup 不呼叫 gemini CLI 故不受影響。
+
+### R15: 統一 429 fallback
+- **Level**: MUST
+- **Description**: review / adversarial-review / security-review / ask 四個 command 呼叫 Gemini CLI 撞 429 / RESOURCE_EXHAUSTED / rate limit / overloaded 時，自動以 flash 重試一次；fallback 呼叫仍帶同一 policy。setup 不受影響。
+
 ## Scenarios
 
 ### S1: 首次設定檢查
@@ -116,6 +124,21 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 - **Decision**: review command 硬編碼 `-m flash`（CLI 別名，自動解析到最新 flash 版本）
 - **Rationale**: Pro 系列透過 OAuth 頻繁 429（MODEL_CAPACITY_EXHAUSTED），flash 容量充裕且 code review 品質足夠。Phase 2 的 /gemini:config 再開放模型切換
 - **Date**: 2026-04-09
+
+### D5: Tool policy 共用單檔
+- **Decision**: `plugins/gemini/policies/readonly.toml` 一份，四個 command 共用
+- **Rationale**: 四者安全需求一致（read-only 查證），分檔維護容易漂移
+- **Date**: 2026-04-24
+
+### D6: 不改 approval mode
+- **Decision**: 維持 Gemini CLI 預設 approval mode，僅靠 `--admin-policy` 限制
+- **Rationale**: 避開 Plan Mode → YOLO 切換陷阱與 Issue #20469 的 policy 被忽略情境
+- **Date**: 2026-04-24
+
+### D7: Admin-policy 單次呼叫帶入
+- **Decision**: 不寫到 `~/.gemini/policies/`，透過 `--admin-policy` 單次帶入
+- **Rationale**: 不污染使用者 Gemini CLI 個人設定，policy 生命週期與 plugin 綁定
+- **Date**: 2026-04-24
 
 ## Pending Changes
 
