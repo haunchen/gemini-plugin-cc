@@ -1,9 +1,9 @@
 description: "Gemini CLI review system prompt eval"
 
 providers:
-  - id: "exec: ./run-gemini-default.sh"
+  - id: "exec: bash ./run-gemini-default.sh"
     label: "gemini-default"
-  - id: "exec: ./run-gemini.sh"
+  - id: "exec: bash ./run-gemini.sh"
     label: "gemini-custom-review"
 
 prompts:

@@ -1,9 +1,9 @@
 description: "Gemini CLI review — Pro model comparison"
 
 providers:
-  - id: "exec: ./run-gemini-default-pro.sh"
+  - id: "exec: bash ./run-gemini-default-pro.sh"
     label: "gemini-pro-default"
-  - id: "exec: ./run-gemini-pro.sh"
+  - id: "exec: bash ./run-gemini-pro.sh"
     label: "gemini-pro-custom"
 
 prompts:
