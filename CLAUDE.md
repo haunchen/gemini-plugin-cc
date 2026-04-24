@@ -44,3 +44,5 @@ No automated tests yet. Manual testing:
 - Review output must be returned verbatim from Gemini — do not reformat or summarize
 - Hardcoded `-m flash` for review (alias, auto-resolves to latest flash); model switching deferred to Phase 2
 - Specs live in `docs/specs/`, design docs in `docs/plans/`
+- Gemini CLI is invoked with `--admin-policy plugins/gemini/policies/readonly.toml`, restricting it to `read_file` + `glob`. Single shared policy across review / ask / adversarial-review / security-review; setup does not call Gemini so it is unaffected.
+- Do not change `--approval-mode` to work around the policy — the read-only restriction is intentional and the default mode avoids Issue #20469 where some approval modes bypass policies.
