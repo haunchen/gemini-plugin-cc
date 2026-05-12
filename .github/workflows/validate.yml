@@ -1,0 +1,31 @@
+name: Validate
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  validate:
+    name: JSON + shell syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON files
+        run: |
+          set -e
+          while IFS= read -r f; do
+            echo "Checking $f"
+            python3 -c "import json,sys; json.load(open('$f'))" || exit 1
+          done < <(find . -name '*.json' -not -path './node_modules/*' -not -path './.git/*')
+
+      - name: shellcheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          severity: warning
+          scandir: ./plugins
+        continue-on-error: true
+
+      - name: Node syntax check (gemini-images hook)
+        run: node --check plugins/gemini-images/hooks/image-describe.mjs

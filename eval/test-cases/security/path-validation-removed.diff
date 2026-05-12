@@ -1,0 +1,88 @@
+diff --git a/src/main.rs b/src/main.rs
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -227,22 +227,6 @@ async fn run() -> Result<(), AppError> {
+         .flatten()
+         .map(|s| s.as_str());
+
+-    // Validate file paths against traversal before any I/O.
+-    // Use the returned canonical paths so the validated path is the one
+-    // actually used for I/O (closes TOCTOU gap).
+-    let upload_path_buf = if let Some(p) = upload_path {
+-        Some(crate::validate::validate_safe_file_path(p, "--upload")?)
+-    } else {
+-        None
+-    };
+-    let output_path_buf = if let Some(p) = output_path {
+-        Some(crate::validate::validate_safe_file_path(p, "--output")?)
+-    } else {
+-        None
+-    };
+-    let upload_path = upload_path_buf.as_deref().and_then(|p| p.to_str());
+-    let output_path = output_path_buf.as_deref().and_then(|p| p.to_str());
+-
+     let dry_run = matched_args.get_flag("dry-run");
+
+     // Build pagination config from flags
+diff --git a/src/validate.rs b/src/validate.rs
+--- a/src/validate.rs
++++ b/src/validate.rs
+@@ -137,57 +137,6 @@ pub fn validate_safe_dir_path(dir: &str) -> Result<PathBuf, AppError> {
+     Ok(canonical)
+ }
+
+-/// Validates that a file path (e.g. `--upload` or `--output`) is safe.
+-///
+-/// Rejects paths that escape above CWD via `..` traversal, contain
+-/// control characters, or follow symlinks to locations outside CWD.
+-pub fn validate_safe_file_path(path_str: &str, flag_name: &str) -> Result<PathBuf, AppError> {
+-    reject_control_chars(path_str, flag_name)?;
+-
+-    let path = Path::new(path_str);
+-    let cwd = std::env::current_dir()
+-        .map_err(|e| AppError::Validation(format!("Failed to determine current directory: {e}")))?;
+-
+-    let resolved = if path.is_absolute() {
+-        path.to_path_buf()
+-    } else {
+-        cwd.join(path)
+-    };
+-
+-    let canonical = if resolved.exists() {
+-        resolved.canonicalize().map_err(|e| {
+-            AppError::Validation(format!("Failed to resolve {flag_name} '{}': {e}", path_str))
+-        })?
+-    } else {
+-        let raw = normalize_non_existing(&resolved)?;
+-        normalize_dotdot(&raw)
+-    };
+-
+-    let canonical_cwd = cwd.canonicalize().map_err(|e| {
+-        AppError::Validation(format!("Failed to canonicalize current directory: {e}"))
+-    })?;
+-
+-    if !canonical.starts_with(&canonical_cwd) {
+-        return Err(AppError::Validation(format!(
+-            "{flag_name} '{}' resolves to '{}' which is outside the current directory",
+-            path_str,
+-            canonical.display()
+-        )));
+-    }
+-
+-    Ok(canonical)
+-}
+-
+-fn normalize_dotdot(path: &Path) -> PathBuf {
+-    let mut out = PathBuf::new();
+-    for component in path.components() {
+-        match component {
+-            std::path::Component::ParentDir => { out.pop(); }
+-            std::path::Component::CurDir => {}
+-            c => out.push(c),
+-        }
+-    }
+-    out
+-}
+-
+ /// Rejects strings containing null bytes and ASCII control characters.
+ fn reject_control_chars(s: &str, field: &str) -> Result<(), AppError> {

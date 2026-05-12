@@ -1,0 +1,27 @@
+diff --git a/backend/handlers/progress_message.py b/backend/handlers/progress_message.py
+--- a/backend/handlers/progress_message.py
++++ b/backend/handlers/progress_message.py
+@@ -5,17 +5,20 @@ class ProgressMessage:
+     """兩階段訊息更新器：執行中 → 結果"""
+
+     def __init__(self, update: Update, initial_text: str = "執行中..."):
+-        self.update = update
++        self._update = update
+         self.initial_text = initial_text
+         self.message = None
+
+     async def __aenter__(self):
+-        self.message = await self.update.message.reply_text(self.initial_text)
++        self.message = await self._update.message.reply_text(self.initial_text)
+         return self
+
+     async def __aexit__(self, exc_type, exc_val, exc_tb):
+         if exc_type is not None:
+-            await self.message.edit_text("❌ 執行失敗，請稍後再試")
++            try:
++                await self.message.edit_text("❌ 執行失敗，請稍後再試")
++            except Exception:
++                pass  # 不讓 edit_text 錯誤覆蓋原始例外
+         return False
+
+     async def update(self, text: str):

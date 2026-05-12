@@ -1,0 +1,128 @@
+description: "Gemini CLI security-review system prompt eval (flash)"
+
+providers:
+  - id: "exec: bash ./run-gemini-security-default.sh"
+    label: "gemini-security-default"
+  - id: "exec: bash ./run-gemini-security.sh"
+    label: "gemini-security-custom"
+
+prompts:
+  - "Perform a security review of the following code change. Identify any vulnerabilities:\n\n{{diff}}"
+
+defaultTest:
+  options:
+    provider:
+      id: anthropic:messages:claude-sonnet-4-20250514
+      config:
+        apiKeyRequired: false
+
+tests:
+  # Test Case 1: 真 HIGH — 路徑驗證被移除（合成 diff）
+  # PR 移除了 validate_safe_file_path()，--upload / --output 直接走 fs::read/write
+  # 期望：標 path traversal（CWE-22），verdict VULNERABLE
+  - vars:
+      diff: "file://test-cases/security/path-validation-removed.diff"
+    assert:
+      - type: llm-rubric
+        value: |
+          Grade PASS if the review identifies that this diff removes path traversal validation — specifically that --upload and --output paths are no longer checked against canonical CWD before being passed to file I/O, allowing path traversal (e.g. ../../etc/passwd) and symlink escape. Verdict should be VULNERABLE or CONCERNS. The reviewer may also note removal of control-character rejection.
+          Grade FAIL if: the review misses the path traversal issue entirely, OR cites a CWE that does not match the vulnerability class (path traversal is CWE-22; CWE-79/89/798 etc. would be wrong). CWE not being mentioned at all is acceptable (not required).
+
+  # Test Case 2: 真 HIGH — FFmpeg 檔名注入 + 第三方 CDN 供應鏈風險
+  # 新增 useFFmpeg.ts，filename 未清理直接傳 ffmpeg.exec()，core 從 unpkg.com 載入
+  # 期望：標 command injection（檔名）+ supply chain（CDN），verdict VULNERABLE
+  - vars:
+      diff: "file://test-cases/security/ffmpeg-cdn-and-filename.diff"
+    assert:
+      - type: llm-rubric
+        value: |
+          Grade PASS if the review identifies at least ONE of: (a) user-supplied filename passed to FFmpeg without sanitization, enabling command/argument injection via special characters; (b) loading FFmpeg core from third-party CDN (unpkg.com) creates a supply chain risk if unpkg is compromised. Verdict VULNERABLE or CONCERNS.
+          Grade FAIL if: review reports no security issues at all, OR cites a CWE that does not match the issue class (command injection is CWE-77/78/88; supply chain is CWE-829/494). Wrong CWEs (e.g. CWE-79 XSS, CWE-89 SQLi) for these issues fail.
+
+  # Test Case 3: 真 HIGH — URL/path 用 format! 拼接（合成 diff）
+  # build_create_template_url 用 user-controlled project/location/template_id 拼字串
+  # 期望：標 URL/path injection，verdict VULNERABLE 或 CONCERNS
+  - vars:
+      diff: "file://test-cases/security/url-format-string.diff"
+    assert:
+      - type: llm-rubric
+        value: |
+          Grade PASS if the review identifies that user-controlled inputs (project, location, template_id from CLI args) are interpolated into URL paths via format! without validation or URL-encoding, allowing path traversal in URLs or breaking out of the path component to inject extra path segments / query params. The reviewer may frame this as missing input validation, missing URL encoding, or path injection. Verdict VULNERABLE or CONCERNS.
+          Grade FAIL if: review misses the URL/path injection class entirely, OR cites a CWE that does not fit (CWE-20/22/74/116/918 are reasonable; CWE-79/89/798 would be wrong here).
+
+  # Test Case 4: 真 HIGH — SQL injection（合成自 OWASP cheat sheet pattern）
+  # 三個 endpoint 都用 string concat 拼 SQL：GET /users/:id、POST /login、GET /users/search
+  # 期望：標 SQL injection（CWE-89），verdict VULNERABLE
+  - vars:
+      diff: "file://test-cases/security/sql-injection-express.diff"
+    assert:
+      - type: llm-rubric
+        value: |
+          Grade PASS if the review identifies SQL injection via string concatenation / template literals in at least 2 of the 3 endpoints (GET /users/:id with ${userId}, POST /login with ${username}/${password}, GET /users/search with name and sort). Verdict should be VULNERABLE.
+          Grade FAIL if: the review misses SQL injection entirely, only flags ONE endpoint, OR cites a CWE that does not match (SQL injection is CWE-89; CWE-77/78/79 etc. would be wrong). The review may additionally mention plaintext password storage as a separate finding — that's a bonus, not required.
+
+  # Test Case 5: 真 HIGH — Hardcoded secrets（合成）
+  # config.py 寫死 Stripe live key、Slack webhook、AWS key、DB 密碼、JWT secret、Gemini/OpenAI key
+  # 期望：標 hardcoded credentials（CWE-798），verdict VULNERABLE
+  - vars:
+      diff: "file://test-cases/security/hardcoded-secrets.diff"
+    assert:
+      - type: llm-rubric
+        value: |
+          Grade PASS if the review identifies hardcoded secrets / credentials in config.py — at minimum recognising that production API keys, webhook URLs, AWS credentials, database passwords, and JWT secrets must not be committed to source. Verdict should be VULNERABLE.
+          Grade FAIL if: review treats this as acceptable configuration, OR cites a CWE that does not match (hardcoded secrets is CWE-798 or CWE-256/259/321; CWE-79/89/22 would be wrong).
+
+  # Test Case 6: 真 MEDIUM — Rate limit 被移除（合成 diff）
+  # PR 移除了 Turnstile verify endpoint 的 KV-based rate limiting
+  # 期望：標 missing rate limiting（CWE-770/799），verdict CONCERNS
+  - vars:
+      diff: "file://test-cases/security/rate-limit-removed.diff"
+    assert:
+      - type: llm-rubric
+        value: |
+          Grade PASS if the review identifies that this diff removes rate limiting from a Turnstile (CAPTCHA) verification endpoint, exposing it to abuse / brute force / token enumeration. Verdict CONCERNS or VULNERABLE.
+          Grade FAIL if: review misses the rate limiting removal, OR cites a CWE that does not match (missing rate limiting is CWE-770 / CWE-799 / CWE-307; CWE-79/89/22 would be wrong).
+
+  # Test Case 7: 真 MEDIUM — Weak CSP + permissive CORS + info disclosure headers
+  # 多重設定問題：CSP 用 'unsafe-inline'/'unsafe-eval'/default-src *、CORS allow *、暴露 Server/X-Powered-By
+  # 期望：列出多個 MEDIUM/LOW，verdict CONCERNS
+  - vars:
+      diff: "file://test-cases/security/weak-csp-headers.diff"
+    assert:
+      - type: llm-rubric
+        value: |
+          Grade PASS if the review identifies at least 2 of: (a) overly permissive CSP using 'unsafe-inline' / 'unsafe-eval' / wildcard sources (XSS risk), (b) wildcard CORS Access-Control-Allow-Origin combined with credentials:true (CORS misconfiguration / origin reflection), (c) information disclosure via X-Powered-By or Server headers. Verdict CONCERNS at minimum.
+          Grade FAIL if: review treats these headers as adequate, OR reports a CRITICAL/HIGH-only verdict that misses the CSP/CORS class entirely, OR cites CWEs that do not match (CSP weak is CWE-1021/79; CORS is CWE-942/346; info disclosure is CWE-200; wrong CWEs like CWE-89 SQLi fail).
+
+  # Test Case 8: 安全修復 — 應認可改善而非把舊代碼當漏洞回報
+  # 既有 FFmpeg 檔名清理 + 安全標頭 commit（test-cases/ 共用）
+  # 期望：認可這是修復，verdict 可為 SECURE 或 CONCERNS（如果指出尚有改善空間）
+  - vars:
+      diff: "file://test-cases/security-filename-injection.diff"
+    assert:
+      - type: llm-rubric
+        value: |
+          Grade PASS if the review recognizes this diff contains security IMPROVEMENTS — adding sanitizeFileName() to mitigate command injection via filenames AND adding HTTP security headers (CSP, HSTS, X-Frame-Options, etc.). Pointing out residual / incremental concerns is ALLOWED and should still PASS, including: (a) FFMPEG_CORE_VERSION still loads from unpkg.com CDN (this is factually true — this commit only bumps 0.12.9 → 0.12.10; full self-hosting comes later), (b) sanitizeFileName regex could be tightened or has edge cases, (c) CSP could be stricter. Verdict may be SECURE, CONCERNS, or even VULNERABLE if a concrete residual issue is identified with evidence.
+          Grade FAIL only if: the review completely ignores / fails to acknowledge the security improvements being made (treating the diff as if it were purely vulnerable code with no defensive intent), OR cites a CWE that does not match any actual class present in the diff.
+
+  # Test Case 9: 純依賴升級 — 不可幻想 CVE
+  # Agent SDK 0.2.23 → 0.2.104, MCP SDK 1.26.0 → 1.29.0（test-cases/ 共用）
+  # 期望：verdict SECURE，最多建議查 changelog
+  - vars:
+      diff: "file://test-cases/deps-upgrade-agent-sdk.diff"
+    assert:
+      - type: llm-rubric
+        value: |
+          Grade PASS if the review treats this as a routine dependency upgrade with no security findings, OR optionally suggests checking changelogs for CVE fixes (acceptable bonus). Verdict should be SECURE.
+          Grade FAIL if: the review fabricates specific CVEs / security vulnerabilities in these versions without evidence, OR escalates to VULNERABLE / CONCERNS with imagined issues. "Suggest checking changelogs" is fine; "@anthropic-ai/claude-agent-sdk@0.2.23 has CVE-XXXX" without basis is fabrication.
+
+  # Test Case 10: 純命名變更 — 零捏造
+  # Battery Guardian → Battery Monitor（AndroidManifest、Dart、pubspec，test-cases/ 共用）
+  # 期望：verdict SECURE，零 finding
+  - vars:
+      diff: "file://test-cases/app-rename.diff"
+    assert:
+      - type: llm-rubric
+        value: |
+          Grade PASS if the review recognizes this as a pure naming/branding change (Battery Guardian → Battery Monitor) with no functional or security impact. Verdict should be SECURE with no vulnerabilities reported.
+          Grade FAIL if: the review fabricates any security finding from a pure rename, OR escalates verdict above SECURE. Noting that the rename should be applied consistently across all files is informational, not a security finding.

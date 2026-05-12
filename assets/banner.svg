@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640">
+  <!-- 底色 -->
+  <rect width="1280" height="640" fill="#0f172a"/>
+
+  <!-- 標題 -->
+  <text x="80" y="150" font-family="'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" font-size="64" font-weight="700" fill="#E2E8F0">
+    gemini-plugin-cc
+  </text>
+  <rect x="80" y="170" width="96" height="4" rx="2" fill="#fb923c"/>
+  <text x="80" y="218" font-family="'Inter', 'Noto Sans TC', system-ui, sans-serif" font-size="24" fill="#94A3B8">
+    Claude Code plugin — second opinion from Gemini CLI
+  </text>
+
+  <!-- 右上角 plugin 標籤 -->
+  <rect x="1040" y="64" width="176" height="36" rx="4" fill="#212a37" stroke="#4f5b62" stroke-width="1"/>
+  <circle cx="1062" cy="82" r="4" fill="#22c55e"/>
+  <text x="1078" y="88" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="14" fill="#94A3B8">
+    .claude-plugin
+  </text>
+
+  <!-- 流程節點區 (y=340 中軸) -->
+
+  <!-- 節點 1：Claude Code -->
+  <rect x="80" y="320" width="300" height="120" rx="4" fill="#212a37" stroke="#4f5b62" stroke-width="1"/>
+  <text x="230" y="365" text-anchor="middle" font-family="'Inter', 'Noto Sans TC', system-ui, sans-serif" font-size="20" font-weight="600" fill="#E2E8F0">
+    Claude Code
+  </text>
+  <text x="230" y="395" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="14" fill="#94A3B8">
+    /review
+  </text>
+  <text x="230" y="415" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="14" fill="#94A3B8">
+    /adversarial-review
+  </text>
+
+  <!-- 箭頭 1 -->
+  <line x1="380" y1="380" x2="490" y2="380" stroke="#64748B" stroke-width="2"/>
+  <polygon points="490,372 506,380 490,388" fill="#64748B"/>
+  <text x="443" y="368" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="12" fill="#64748B">
+    spawn
+  </text>
+
+  <!-- 節點 2：Gemini CLI（強調節點，brand-blue border） -->
+  <rect x="506" y="310" width="268" height="140" rx="4" fill="#152030" stroke="#0084ff" stroke-width="2"/>
+  <text x="640" y="355" text-anchor="middle" font-family="'Inter', 'Noto Sans TC', system-ui, sans-serif" font-size="22" font-weight="700" fill="#E2E8F0">
+    Gemini CLI
+  </text>
+  <text x="640" y="385" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="13" fill="#94A3B8">
+    gemini -p
+  </text>
+  <text x="640" y="405" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="13" fill="#94A3B8">
+    --admin-policy
+  </text>
+  <text x="640" y="430" text-anchor="middle" font-family="'Inter', system-ui, sans-serif" font-size="13" fill="#64748B">
+    pro &#8594; flash fallback
+  </text>
+
+  <!-- 箭頭 2 -->
+  <line x1="774" y1="380" x2="884" y2="380" stroke="#64748B" stroke-width="2"/>
+  <polygon points="884,372 900,380 884,388" fill="#64748B"/>
+  <text x="829" y="368" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="12" fill="#64748B">
+    stdout
+  </text>
+
+  <!-- 節點 3：Review Output -->
+  <rect x="900" y="320" width="300" height="120" rx="4" fill="#212a37" stroke="#4f5b62" stroke-width="1"/>
+  <text x="1050" y="358" text-anchor="middle" font-family="'Inter', 'Noto Sans TC', system-ui, sans-serif" font-size="20" font-weight="600" fill="#E2E8F0">
+    Review
+  </text>
+  <text x="1050" y="386" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="13" fill="#94A3B8">
+    Summary
+  </text>
+  <text x="1050" y="406" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="13" fill="#94A3B8">
+    Findings
+  </text>
+  <text x="1050" y="426" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="13" fill="#fb923c">
+    Verdict
+  </text>
+
+  <!-- 底部規格列：5 commands · OAuth · readonly policy -->
+  <line x1="80" y1="498" x2="1200" y2="498" stroke="#2d3a47" stroke-width="1"/>
+
+  <g font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="14" fill="#94A3B8">
+    <text x="80" y="540">
+      <tspan fill="#64748B">commands:</tspan> review · ask · adversarial-review · security-review · config · setup
+    </text>
+    <text x="80" y="568">
+      <tspan fill="#64748B">auth:</tspan> Google OAuth
+      <tspan fill="#64748B" dx="24">policy:</tspan> read_file · glob (admin-policy lockdown)
+    </text>
+  </g>
+
+  <!-- 署名 -->
+  <text x="1200" y="600" text-anchor="end" font-family="'Inter', system-ui, sans-serif" font-size="18" fill="#64748B">
+    @frankchen.tw
+  </text>
+</svg>

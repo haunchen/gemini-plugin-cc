@@ -1,0 +1,11 @@
+{
+  "name": "gemini",
+  "version": "0.1.0",
+  "description": "Gemini CLI integration for Claude Code — ask, review, security-review, adversarial-review",
+  "author": {
+    "name": "Frank Chen"
+  },
+  "repository": "https://github.com/haunchen/gemini-plugin-cc",
+  "license": "MIT",
+  "keywords": ["gemini", "code-review", "second-opinion"]
+}

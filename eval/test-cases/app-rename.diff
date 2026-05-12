@@ -1,0 +1,50 @@
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -11,7 +11,7 @@
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+
+     <application
+-        android:label="Battery Guardian"
++        android:label="Battery Monitor"
+         android:name="${applicationName}"
+         android:icon="@mipmap/ic_launcher">
+         <activity
+diff --git a/lib/app.dart b/lib/app.dart
+--- a/lib/app.dart
++++ b/lib/app.dart
+@@ -8,12 +8,12 @@ import 'l10n/app_localizations.dart';
+ import 'providers/settings_provider.dart';
+ import 'screens/screens.dart';
+
+-/// Battery Guardian 應用程式主元件
++/// Battery Monitor 應用程式主元件
+ ///
+ /// 設定應用程式的主題、多語系和路由，
+ /// 使用 Riverpod 進行狀態管理。
+-class BatteryGuardianApp extends ConsumerWidget {
+-  const BatteryGuardianApp({super.key});
++class BatteryMonitorApp extends ConsumerWidget {
++  const BatteryMonitorApp({super.key});
+
+   @override
+   Widget build(BuildContext context, WidgetRef ref) {
+@@ -25,7 +25,7 @@ class BatteryGuardianApp extends ConsumerWidget {
+
+     return MaterialApp(
+       // 應用程式標題
+-      title: 'Battery Guardian',
++      title: 'Battery Monitor',
+
+       // 隱藏 Debug 標籤
+       debugShowCheckedModeBanner: false,
+diff --git a/pubspec.yaml b/pubspec.yaml
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -1,5 +1,5 @@
+-name: battery_guardian
+-description: "Battery Guardian - 監控公務機電量，低電量時透過 LINE Messaging API 通知"
++name: battery_monitor
++description: "Battery Monitor - 監控公務機電量，低電量時透過 LINE Messaging API 通知"
+ publish_to: 'none'
+ version: 1.0.0+1

@@ -1,0 +1,52 @@
+diff --git a/functions/api/verify-turnstile.ts b/functions/api/verify-turnstile.ts
+--- a/functions/api/verify-turnstile.ts
++++ b/functions/api/verify-turnstile.ts
+@@ -1,6 +1,5 @@
+ interface Env {
+   TURNSTILE_SECRET_KEY: string;
+-  RATE_LIMIT?: KVNamespace;
+ }
+
+ interface TurnstileVerifyResponse {
+@@ -9,32 +8,8 @@ interface TurnstileVerifyResponse {
+ }
+
+ const JSON_HEADERS = { "Content-Type": "application/json" };
+-const RATE_LIMIT_MAX = 10;
+-const RATE_LIMIT_WINDOW_SECONDS = 60;
+
+ export const onRequestPost: PagesFunction<Env> = async (context) => {
+-  const ip = context.request.headers.get("CF-Connecting-IP") || "unknown";
+-
+-  // Rate limiting (skip if KV not bound)
+-  if (context.env.RATE_LIMIT) {
+-    try {
+-      const key = `turnstile:${ip}`;
+-      const current = await context.env.RATE_LIMIT.get(key);
+-      const count = current ? parseInt(current, 10) : 0;
+-      if (count >= RATE_LIMIT_MAX) {
+-        return new Response(
+-          JSON.stringify({ success: false, error: "Too many requests" }),
+-          { status: 429, headers: { ...JSON_HEADERS, "Retry-After": String(RATE_LIMIT_WINDOW_SECONDS) } }
+-        );
+-      }
+-      await context.env.RATE_LIMIT.put(key, String(count + 1), {
+-        expirationTtl: RATE_LIMIT_WINDOW_SECONDS,
+-      });
+-    } catch {
+-      // Fail open: if KV errors, allow the request through
+-    }
+-  }
+-
+   let body: { token?: unknown };
+   try {
+     body = await context.request.json();
+@@ -61,7 +36,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
+       body: new URLSearchParams({
+         secret: context.env.TURNSTILE_SECRET_KEY,
+         response: token,
+-        remoteip: ip,
++        remoteip: context.request.headers.get("CF-Connecting-IP") || "",
+       }),
+     }
+   );

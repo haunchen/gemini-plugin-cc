@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# promptfoo
+eval/output/
+eval/.promptfoo/
+.promptfoo/
+
+# Claude Code local settings
+.claude/settings.local.json

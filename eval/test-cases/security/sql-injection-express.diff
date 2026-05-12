@@ -1,0 +1,49 @@
+diff --git a/src/routes/users.js b/src/routes/users.js
+new file mode 100644
+--- /dev/null
++++ b/src/routes/users.js
+@@ -0,0 +1,50 @@
++const express = require("express");
++const mysql = require("mysql2/promise");
++
++const router = express.Router();
++
++const pool = mysql.createPool({
++  host: process.env.DB_HOST,
++  user: process.env.DB_USER,
++  password: process.env.DB_PASSWORD,
++  database: process.env.DB_NAME,
++});
++
++router.get("/users/:id", async (req, res) => {
++  const userId = req.params.id;
++  try {
++    const [rows] = await pool.query(
++      `SELECT id, username, email, created_at FROM users WHERE id = ${userId}`
++    );
++    if (rows.length === 0) return res.status(404).json({ error: "Not found" });
++    res.json(rows[0]);
++  } catch (e) {
++    res.status(500).json({ error: e.message });
++  }
++});
++
++router.post("/login", async (req, res) => {
++  const { username, password } = req.body;
++  const sql = `SELECT id, username FROM users WHERE username = '${username}' AND password = '${password}'`;
++  const [rows] = await pool.query(sql);
++  if (rows.length === 0) return res.status(401).json({ error: "Invalid credentials" });
++  res.json({ id: rows[0].id, username: rows[0].username });
++});
++
++router.get("/users/search", async (req, res) => {
++  const { name, sort } = req.query;
++  const sql =
++    "SELECT id, username FROM users " +
++    "WHERE username LIKE '%" + name + "%' " +
++    "ORDER BY " + sort;
++  const [rows] = await pool.query(sql);
++  res.json(rows);
++});
++
++module.exports = router;

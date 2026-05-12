@@ -1,0 +1,93 @@
+diff --git a/backend_ts/src/handlers/agent.ts b/backend_ts/src/handlers/agent.ts
+--- a/backend_ts/src/handlers/agent.ts
++++ b/backend_ts/src/handlers/agent.ts
+@@ -474,8 +474,8 @@ export class AgentHandler {
+           if (summaryEvent.summary) {
+             await pm.update(`📋 ${summaryEvent.summary.slice(0, 80)}`);
+           }
+-        } else if (event.type === "system" && (event as any).subtype === "task_notification") {
+-          const notification = event as { status?: string; summary?: string };
++        } else if (event.type === "system" && (event as { subtype?: string }).subtype === "task_notification") {
++          const notification = event as { subtype?: string; status?: string; summary?: string };
+           const status = notification.status || "unknown";
+           const summary = notification.summary || "";
+           const icon = status === "completed" ? "✅" : status === "failed" ? "❌" : "⏹️";
+@@ -497,9 +497,10 @@ export class AgentHandler {
+       responseText = stripDigest(responseText);
+     }
+
++    const sharedSources = webSearchQueries.length > 0 ? parseWebSearchSources(responseText) : [];
+     const webSearchResults: WebSearchResult[] = webSearchQueries.map((q) => ({
+       query: q,
+-      sources: parseWebSearchSources(responseText),
++      sources: sharedSources,
+     }));
+
+     return { responseText, toolNames, webSearchResults, taggedSessionId };
+diff --git a/backend_ts/src/telegram/engineer-commands.ts b/backend_ts/src/telegram/engineer-commands.ts
+--- a/backend_ts/src/telegram/engineer-commands.ts
++++ b/backend_ts/src/telegram/engineer-commands.ts
+@@ -23,6 +23,7 @@ import {
+   formatPrResult,
+   truncateCallbackData,
+ } from "../engineer/format";
++import { spawnSync } from "child_process";
+ import type { Logger } from "../logger";
+
+ export function registerEngineerCommands(
+@@ -222,7 +223,7 @@ export function registerEngineerCommands(
+       }
+
+       // 產生 bootstrap prompt
+-      const { spawnSync } = await import("child_process");
++
+
+       const baseBranch = detectBaseBranch(wt.worktreePath);
+       const gitLog = spawnSync("git", ["log", "--oneline", `${baseBranch}..HEAD`], {
+@@ -301,7 +302,7 @@ export function registerEngineerCommands(
+     try {
+       const { dirname, join } = await import("path");
+       const { existsSync, readdirSync, statSync } = await import("fs");
+-      const { spawnSync } = await import("child_process");
++
+
+       const worktreeParent = join(dirname(confirmedProject), ".app-worktrees");
+       if (!existsSync(worktreeParent)) {
+@@ -371,7 +372,7 @@ export function registerEngineerCommands(
+     if (!confirmedProject) return;
+
+     try {
+-      const { spawnSync } = await import("child_process");
++
+       const { dirname, join } = await import("path");
+
+       const worktreeParent = join(dirname(confirmedProject), ".app-worktrees");
+@@ -444,14 +445,7 @@ export function registerEngineerCommands(
+     }
+
+     // 檢查是否有 commit
+-    const { spawnSync } = await import("child_process");
+-
+-    // 偵測 base branch
+-    const mergeBaseResult = spawnSync("git", ["merge-base", "HEAD", "main"], {
+-      cwd: worktreePath,
+-      encoding: "utf-8",
+-    });
+-    const baseBranch = mergeBaseResult.status === 0 ? "main" : "master";
++    const baseBranch = detectBaseBranch(worktreePath);
+     const diffResult = spawnSync("git", ["log", "--oneline", `${baseBranch}..HEAD`], {
+       cwd: worktreePath,
+       encoding: "utf-8",
+diff --git a/backend_ts/src/telegram/handlers.ts b/backend_ts/src/telegram/handlers.ts
+--- a/backend_ts/src/telegram/handlers.ts
++++ b/backend_ts/src/telegram/handlers.ts
+@@ -46,7 +46,8 @@ export function registerCommonHandlers(
+     const caption = ctx.message.caption ?? "";
+     for (const [cmdName, cmdConfig] of Object.entries(commands.commands)) {
+       if (cmdConfig.agent) {
+-        const regex = new RegExp(`^/${cmdName}\\b`, "i");
++        const escaped = cmdName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
++        const regex = new RegExp(`^/${escaped}\\b`, "i");
+         if (regex.test(caption)) {
+           await captureHandler(ctx);
+           return;

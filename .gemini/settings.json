@@ -1,0 +1,6 @@
+{
+  "generateContentConfig": {
+    "temperature": 0,
+    "topP": 1
+  }
+}

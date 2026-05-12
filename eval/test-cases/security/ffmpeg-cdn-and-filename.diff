@@ -1,0 +1,125 @@
+diff --git a/src/hooks/useFFmpeg.ts b/src/hooks/useFFmpeg.ts
+new file mode 100644
+--- /dev/null
++++ b/src/hooks/useFFmpeg.ts
+@@ -0,0 +1,99 @@
++import { useState, useRef, useCallback } from "react";
++import { FFmpeg } from "@ffmpeg/ffmpeg";
++import { toBlobURL } from "@ffmpeg/util";
++
++type FFmpegStatus = "idle" | "loading" | "ready" | "running" | "error";
++
++// 與 package.json 的 @ffmpeg/core 版本保持一致
++const FFMPEG_CORE_VERSION = "0.12.9";
++const FFMPEG_CORE_BASE_URL = `https://unpkg.com/@ffmpeg/core@${FFMPEG_CORE_VERSION}/dist/esm`;
++
++export function useFFmpeg() {
++  const ffmpegRef = useRef<FFmpeg | null>(null);
++  const [status, setStatus] = useState<FFmpegStatus>("idle");
++  const [progress, setProgress] = useState(0);
++  const [error, setError] = useState<string | null>(null);
++
++  const load = useCallback(async () => {
++    if (ffmpegRef.current) return;
++
++    try {
++      setStatus("loading");
++      setError(null);
++
++      const ffmpeg = new FFmpeg();
++
++      ffmpeg.on("progress", ({ progress: p }) => {
++        setProgress(Math.round(p * 100));
++      });
++
++      await ffmpeg.load({
++        coreURL: await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`, "text/javascript"),
++        wasmURL: await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`, "application/wasm"),
++      });
++
++      ffmpegRef.current = ffmpeg;
++      setStatus("ready");
++    } catch (e) {
++      setStatus("error");
++      setError(e instanceof Error ? `FFmpeg 載入失敗: ${e.message}` : "FFmpeg 載入失敗");
++    }
++  }, []);
++
++  const exec = useCallback(
++    async (
++      inputFile: File,
++      outputFileName: string,
++      args: string[],
++      outputMimeType?: string
++    ): Promise<Blob | null> => {
++      const ffmpeg = ffmpegRef.current;
++      if (!ffmpeg) return null;
++
++      const inputName = inputFile.name.replace(/.*[\\/]/, "");
++
++      try {
++        setStatus("running");
++        setProgress(0);
++        setError(null);
++
++        const inputData = new Uint8Array(await inputFile.arrayBuffer());
++        await ffmpeg.writeFile(inputName, inputData);
++
++        try {
++          await ffmpeg.exec(args);
++
++          const outputData = await ffmpeg.readFile(outputFileName);
++
++          setStatus("ready");
++          setProgress(100);
++
++          return new Blob([outputData], { type: outputMimeType });
++        } finally {
++          await ffmpeg.deleteFile(inputName).catch(() => undefined);
++          await ffmpeg.deleteFile(outputFileName).catch(() => undefined);
++        }
++      } catch (e) {
++        setStatus("error");
++        setError(e instanceof Error ? `處理失敗: ${e.message}` : "處理失敗");
++        return null;
++      }
++    },
++    []
++  );
++
++  return { status, progress, error, load, exec };
++}
+diff --git a/src/pages/Mp3Converter.tsx b/src/pages/Mp3Converter.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/pages/Mp3Converter.tsx
+@@ -0,0 +1,30 @@
++import { useState } from "react";
++import { useFFmpeg } from "../hooks/useFFmpeg";
++
++export function Mp3Converter() {
++  const [file, setFile] = useState<File | null>(null);
++  const { exec } = useFFmpeg();
++
++  const handleConvert = async () => {
++    if (!file) return;
++
++    const inputName = file.name.replace(/.*[\\/]/, "");
++    const outName = file.name.replace(/\.[^.]+$/, "") + ".mp3";
++    const blob = await exec(file, outName, [
++      "-i", inputName,
++      "-vn",
++      "-acodec", "libmp3lame",
++      "-b:a", "192k",
++      outName,
++    ], "audio/mpeg");
++
++    if (blob) {
++      const url = URL.createObjectURL(blob);
++      const a = document.createElement("a");
++      a.href = url;
++      a.download = outName;
++      a.click();
++    }
++  };
++}

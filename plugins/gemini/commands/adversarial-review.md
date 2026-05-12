@@ -1,0 +1,61 @@
+---
+description: Get a devil's advocate review that challenges your design decisions
+allowed-tools: Bash, Read, Glob
+argument-hint: [file-path] [--model <model>]
+---
+
+Get a devil's advocate review using Gemini CLI. Instead of finding bugs, this challenges your design decisions and proposes alternatives.
+
+## Step 1: Parse --model parameter
+
+Check if $ARGUMENTS contains `--model <value>`:
+- If yes: extract the value as MODEL, remove `--model <value>` from $ARGUMENTS
+- If no: set MODEL = pro
+
+Valid model values: flash, pro, flash-lite, or any full model name.
+
+## Step 2: Determine input
+
+If $ARGUMENTS (after --model removal) is provided:
+- If it contains glob characters (* or ?), use the Glob tool to expand it, then Read each matched file
+- Otherwise, Read the single file directly
+- Concatenate all file contents as REVIEW_INPUT
+
+If $ARGUMENTS is empty:
+- Run: `git diff HEAD 2>/dev/null`
+- If the command fails (e.g., no commits yet) or the diff is empty, also try: `git diff --cached`
+- If still empty, tell the user: "No changes found. Provide a file path or make some changes first."
+- Store the diff output as REVIEW_INPUT
+
+## Step 3: Locate system prompt and policy
+
+Determine the absolute path to the plugin root (the parent of the `commands/` directory containing this file).
+
+- `system-prompts/adversarial-review.md` → SYSTEM_PROMPT_PATH
+- `policies/readonly.toml` → POLICY_PATH
+
+## Step 4: Call Gemini CLI
+
+Run the following bash command, passing REVIEW_INPUT via stdin:
+
+```bash
+output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -m $MODEL --admin-policy "$POLICY_PATH" 2>&1)
+exit_code=$?
+if [ $exit_code -ne 0 ] && echo "$output" | grep -qi "429\|quota\|RESOURCE_EXHAUSTED\|rate limit\|overloaded"; then
+  echo "[Fallback] $MODEL unavailable (quota/rate limit), retrying with flash..." >&2
+  output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -m flash --admin-policy "$POLICY_PATH" 2>&1)
+fi
+echo "$output"
+```
+
+Note: We pipe input via stdin instead of -p flag to handle large diffs and special characters safely. If the preferred model hits quota limits, it automatically falls back to flash.
+
+## Step 5: Present results
+
+Show the Gemini response directly to the user. Do not modify, summarize, or reformat it.
+
+## Error handling
+
+- If `gemini` command is not found: suggest running `/gemini:setup` first
+- If the command fails with an auth error: suggest running `gemini` interactively to re-authenticate via Google OAuth
+- If the command times out or returns an error: show the error message and suggest retrying

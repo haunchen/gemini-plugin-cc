@@ -1,0 +1,96 @@
+diff --git a/public/_headers b/public/_headers
+--- a/public/_headers
++++ b/public/_headers
+@@ -1,3 +1,9 @@
+ /*
+   Cross-Origin-Opener-Policy: same-origin
+   Cross-Origin-Embedder-Policy: require-corp
++  X-Content-Type-Options: nosniff
++  X-Frame-Options: DENY
++  Referrer-Policy: strict-origin-when-cross-origin
++  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
++  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
++  Content-Security-Policy: default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; connect-src 'self' blob: https://unpkg.com; img-src 'self' data:; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+diff --git a/src/hooks/useFFmpeg.ts b/src/hooks/useFFmpeg.ts
+--- a/src/hooks/useFFmpeg.ts
++++ b/src/hooks/useFFmpeg.ts
+@@ -5,9 +5,23 @@ import { toBlobURL } from "@ffmpeg/util";
+ type FFmpegStatus = "idle" | "loading" | "ready" | "running" | "error";
+
+ // 與 package.json 的 @ffmpeg/core 版本保持一致
+-const FFMPEG_CORE_VERSION = "0.12.9";
++// 注意：ffmpeg-core.wasm 約 30MB，超過 Cloudflare Pages 25MB 單檔限制，無法自行託管
++const FFMPEG_CORE_VERSION = "0.12.10";
+ const FFMPEG_CORE_BASE_URL = `https://unpkg.com/@ffmpeg/core@${FFMPEG_CORE_VERSION}/dist/esm`;
+
++/**
++ * 清理檔名中可能造成 FFmpeg 指令問題的特殊字元，
++ * 僅保留英數字、中日韓文字、底線、連字號與句點。
++ */
++export function sanitizeFileName(name: string): string {
++  const stripped = name.replace(/.*[\\/]/, "");
++  const dotIndex = stripped.lastIndexOf(".");
++  const baseName = dotIndex > 0 ? stripped.slice(0, dotIndex) : stripped;
++  const ext = dotIndex > 0 ? stripped.slice(dotIndex) : "";
++  const sanitized = baseName.replace(/[^\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff.-]/g, "_");
++  return (sanitized || "file") + ext;
++}
++
+ export function useFFmpeg() {
+   const ffmpegRef = useRef<FFmpeg | null>(null);
+   const [status, setStatus] = useState<FFmpegStatus>("idle");
+@@ -50,7 +64,7 @@ export function useFFmpeg() {
+       const ffmpeg = ffmpegRef.current;
+       if (!ffmpeg) return null;
+
+-      const inputName = inputFile.name.replace(/.*[\\/]/, "");
++      const inputName = sanitizeFileName(inputFile.name);
+
+       try {
+         setStatus("running");
+diff --git a/src/pages/Mp3Converter.tsx b/src/pages/Mp3Converter.tsx
+--- a/src/pages/Mp3Converter.tsx
++++ b/src/pages/Mp3Converter.tsx
+@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
+ import { FileDropZone } from "../components/FileDropZone";
+ import { ProgressBar } from "../components/ProgressBar";
+ import { UsageInfo } from "../components/UsageInfo";
+-import { useFFmpeg } from "../hooks/useFFmpeg";
++import { useFFmpeg, sanitizeFileName } from "../hooks/useFFmpeg";
+
+ const BITRATE_OPTIONS = ["64", "128", "192", "320"] as const;
+
+@@ -25,8 +25,8 @@ export function Mp3Converter() {
+   const handleConvert = async () => {
+     if (!file) return;
+
+-    const inputName = file.name.replace(/.*[\\/]/, "");
+-    const outName = file.name.replace(/\.[^.]+$/, "") + ".mp3";
++    const inputName = sanitizeFileName(file.name);
++    const outName = sanitizeFileName(file.name).replace(/\.[^.]+$/, "") + ".mp3";
+     const blob = await exec(file, outName, [
+       "-i", inputName,
+       "-vn",
+diff --git a/src/pages/VideoTrimmer.tsx b/src/pages/VideoTrimmer.tsx
+--- a/src/pages/VideoTrimmer.tsx
++++ b/src/pages/VideoTrimmer.tsx
+@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
+ import { FileDropZone } from "../components/FileDropZone";
+ import { ProgressBar } from "../components/ProgressBar";
+ import { UsageInfo } from "../components/UsageInfo";
+-import { useFFmpeg } from "../hooks/useFFmpeg";
++import { useFFmpeg, sanitizeFileName } from "../hooks/useFFmpeg";
+
+ function formatTime(seconds: number): string {
+   const h = Math.floor(seconds / 3600);
+@@ -75,8 +75,8 @@ export function VideoTrimmer() {
+     }
+
+     const ext = file.name.split(".").pop() || "mp4";
+-    const inputName = file.name.replace(/.*[\\/]/, "");
+-    const outName = file.name.replace(/\.[^.]+$/, "") + `_trimmed.${ext}`;
++    const inputName = sanitizeFileName(file.name);
++    const outName = sanitizeFileName(file.name).replace(/\.[^.]+$/, "") + `_trimmed.${ext}`;
+
+     const blob = await exec(file, outName, [
+       "-i", inputName,
