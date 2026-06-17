@@ -8,6 +8,18 @@
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet)](https://docs.anthropic.com/en/docs/claude-code/plugins)
 [![Gemini CLI](https://img.shields.io/badge/Gemini%20CLI-required-4285F4)](https://github.com/google-gemini/gemini-cli)
 
+> [!WARNING]
+> **Gemini CLI consumer access ends on June 18, 2026.**
+>
+> Per [Google's official deprecation notice](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals), *"Starting June 18, 2026, Gemini Code Assist IDE extensions will stop serving requests"* — this applies to the **Gemini Code Assist for individuals (free), Google AI Pro, and Google AI Ultra** tiers, **and to Gemini CLI as well**. Because both plugins spawn the `gemini` CLI under the hood, they will stop working for those tiers after that date, with no grace period.
+>
+> | Your tier | Impact |
+> |-----------|--------|
+> | Gemini Code Assist **Standard / Enterprise** | ✅ Not affected — these plugins keep working |
+> | **Individuals (free) / AI Pro / AI Ultra** | ❌ `gemini` CLI stops serving requests; these plugins stop working |
+>
+> Google's recommended path for affected tiers is to migrate to the **Antigravity** family of products. This project has evaluated the Antigravity CLI (`agy`) but has **not** migrated: `agy` currently provides no mechanism to inject a custom system prompt, which is what these plugins rely on for review quality. Migration will be reconsidered if/when that capability is added.
+
 A marketplace of [Claude Code plugins](https://docs.anthropic.com/en/docs/claude-code/plugins) that integrate [Gemini CLI](https://github.com/google-gemini/gemini-cli) — get a second opinion on code, and keep your prompt cache warm while reading images.
 
 ## Plugins
