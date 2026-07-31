@@ -38,15 +38,10 @@ Run the following bash command, passing REVIEW_INPUT via stdin to avoid shell es
 
 ```bash
 output=$(printf "%s" "$REVIEW_INPUT" | agy --agent gemini-review --model $MODEL --print-timeout 5m 2>&1)
-exit_code=$?
-if [ $exit_code -ne 0 ] && echo "$output" | grep -qi "429\|quota\|RESOURCE_EXHAUSTED\|rate limit\|overloaded"; then
-  echo "[Fallback] $MODEL unavailable (quota/rate limit), retrying with 3.5 flash..." >&2
-  output=$(printf "%s" "$REVIEW_INPUT" | agy --agent gemini-review --model gemini-3.5-flash-high --print-timeout 5m 2>&1)
-fi
 echo "$output"
 ```
 
-Note: We pipe input via stdin instead of -p to handle large diffs and special characters safely. If the preferred model hits quota limits, it automatically falls back to flash.
+Note: We pipe input via stdin instead of -p to handle large diffs and special characters safely.
 
 If the output does not follow the review format (`## Review Summary` / `## Findings` / `## Verdict`), the agent is not installed — `--agent` silently ignores unknown names. Tell the user to run `/gemini:setup`.
 
@@ -58,4 +53,5 @@ Show the Gemini response directly to the user. Do not modify, summarize, or refo
 
 - If `agy` command is not found: suggest running `/gemini:setup` first
 - If the command fails with an auth error: suggest running `agy` interactively to re-authenticate via Google OAuth
+- If the output reports a quota or rate-limit error (429, RESOURCE_EXHAUSTED, overloaded): show it as-is and suggest retrying later, or picking a different model with `--model` (`agy models` lists the slugs). There is no automatic fallback
 - If the command times out or returns an error: show the error message and suggest retrying

@@ -42,15 +42,10 @@ Build ASK_INPUT:
 
 The system prompt lives in the `gemini-ask` agent, installed by `/gemini:setup`. The agent's `tools` whitelist keeps the run read-only — there is no separate policy file.
 
-Run the following bash command, passing ASK_INPUT via stdin. If the model hits a quota limit it automatically falls back to flash.
+Run the following bash command, passing ASK_INPUT via stdin.
 
 ```bash
 output=$(printf "%s" "$ASK_INPUT" | agy --agent gemini-ask --model $MODEL --print-timeout 5m 2>&1)
-exit_code=$?
-if [ $exit_code -ne 0 ] && echo "$output" | grep -qi "429\|quota\|RESOURCE_EXHAUSTED\|rate limit\|overloaded"; then
-  echo "[Fallback] $MODEL unavailable (quota/rate limit), retrying with 3.5 flash..." >&2
-  output=$(printf "%s" "$ASK_INPUT" | agy --agent gemini-ask --model gemini-3.5-flash-high --print-timeout 5m 2>&1)
-fi
 echo "$output"
 ```
 
@@ -64,4 +59,5 @@ Show the Gemini response directly to the user. Do not modify, summarize, or refo
 
 - If `agy` command is not found: suggest running `/gemini:setup` first
 - If the command fails with an auth error: suggest running `agy` interactively to re-authenticate via Google OAuth
+- If the output reports a quota or rate-limit error (429, RESOURCE_EXHAUSTED, overloaded): show it as-is and suggest retrying later, or picking a different model with `--model` (`agy models` lists the slugs). There is no automatic fallback
 - If the command times out or returns an error: show the error message and suggest retrying

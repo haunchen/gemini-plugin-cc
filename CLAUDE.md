@@ -60,7 +60,7 @@ Commands are Markdown files with YAML frontmatter (`description`, `allowed-tools
 echo "$INPUT" | agy --agent gemini-review --model "$MODEL" --print-timeout 5m 2>&1
 ```
 
-All commands default to `gemini-3.6-flash-high`, falling back to `gemini-3.5-flash-high` on quota / rate-limit errors (a different model pool, not a lower effort tier). Effort is pinned to `high`.
+All commands default to `gemini-3.6-flash-high` with effort pinned to `high`. There is no automatic fallback: a quota / rate-limit error surfaces to the user, who can retry or pick another model with `--model`.
 
 The old pro-by-default routing is gone: agy's Pro is `gemini-3.1-pro`, two generations behind 3.6 flash, and flash-high already scores 10/10 on the eval suite. `--model pro` still resolves to `gemini-3.1-pro-high` for explicit opt-in, and any other value passes through to agy unchanged (`agy models` lists the slugs).
 
