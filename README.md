@@ -115,7 +115,7 @@ Run `agy` interactively once to refresh the OAuth token — `-p` (print) mode do
 ## Commands (gemini plugin)
 
 - `/gemini:setup` — check agy, install the agents, verify they took effect
-- `/gemini:review [path] [--model <m>]` — code review (default model: 3.6 Flash, high effort)
+- `/gemini:review [path] [--spec <path>] [--model <m>]` — code review (default model: 3.6 Flash, high effort). `--spec` adds a spec-compliance verdict
 - `/gemini:ask <question> [file] [--model <m>]` — free-form technical question
 - `/gemini:adversarial-review [path] [--model <m>]` — devil's advocate design challenge
 
@@ -166,7 +166,7 @@ gemini-plugin-cc/
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Both plugins are at 0.2.0; upgrading from 0.1.0 requires re-running `/gemini:setup`.
+See [CHANGELOG.md](CHANGELOG.md). `gemini` is at 0.2.1, `gemini-images` at 0.2.0; re-run `/gemini:setup` after upgrading `gemini` — prompt changes don't reach agy on their own.
 
 ## License
 

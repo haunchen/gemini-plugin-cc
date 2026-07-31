@@ -76,11 +76,28 @@ Free-form prose with no such headings means the agents are not installed. See [T
 | Command | Purpose |
 |---------|---------|
 | `/gemini:setup` | Check agy, install the agents, verify they work |
-| `/gemini:review [path] [--model <m>]` | Code review of `git diff HEAD`, or of a file / glob you name |
+| `/gemini:review [path] [--spec <path>] [--model <m>]` | Code review of `git diff HEAD`, or of a file / glob you name. `--spec` adds a spec-compliance verdict |
 | `/gemini:ask <question> [file] [--model <m>]` | Free-form technical question, optionally with a file as context |
 | `/gemini:adversarial-review [path] [--model <m>]` | Devil's advocate — challenges design decisions instead of hunting bugs |
 
 `review` and `adversarial-review` fall back to `git diff HEAD` (then `--cached`) when you give no path.
+
+### Reviewing against requirements
+
+Point `--spec` at whatever states the intent — a spec, a design doc, a task brief — and the review returns a second verdict:
+
+```
+/gemini:review --spec docs/specs/auth.md
+```
+
+```
+## Spec Compliance: FAIL
+- Missing: R3 (rate limiting on /login) — no reference in the diff
+- Extra: `retries` option in parseConfig(), not requested by any requirement
+- ⚠️ R5 (session expiry) lives in code this diff does not touch — confirm separately
+```
+
+It reports three things: requirements that were skipped, functionality nobody asked for, and requirements solved the wrong way. Anything it cannot settle from the change alone comes back as ⚠️ rather than a guess. `--spec` is repeatable and takes globs. Leave it off and the output is exactly as before.
 
 ### Models
 
