@@ -32,6 +32,8 @@ Design: `docs/plans/2026-07-31-review-task-reviewer-mode-design.md`
 
 Implements: `gemini-review.md` #R17（前置驗證）
 
+執行者：controller 直接跑，不派 implementer。本 task 不產生 repo 檔案變更（probe 檔案落在 repo 外的 scratchpad），沒有可審的 diff，產出只是一個布林結論。
+
 這是設計文件風險 R1 的最小實測。`view_file` 在白名單裡，但從未在 review 路徑上驗過——agy 執行時能否用 repo 相對路徑讀檔是未知數。查不到就要在 Task 2 把「聚焦外查」降級為「明確指出使用者該自己查什麼」。
 
 用一個一次性 probe agent 隔離測試，不動正式 plugin。
@@ -347,9 +349,11 @@ Step 6: 冒煙驗證新結構（不帶 REQUIREMENTS）
 
 Run:
 ```bash
-git diff HEAD~1 -- docs/specs/gemini-review.md | agy --agent gemini-review --model gemini-3.6-flash-high --print-timeout 5m 2>&1 | head -40
+agy --agent gemini-review --model gemini-3.6-flash-high --print-timeout 5m < eval/test-cases/app-rename.diff 2>&1 | head -40
 ```
 Expected: 輸出含 `## Review Summary` 與 `## Verdict:`，且**不含** `## Spec Compliance`。若出現 Spec Compliance，代表條件判斷沒生效，回 Step 2 加強該段措辭。
+
+用 `app-rename.diff` 是因為它是純命名變更、沒有需求區塊，同時驗到「結構有出來」與「不該出現的第二個 verdict 沒出現」。
 
 Step 7: Commit
 
@@ -452,21 +456,29 @@ Note: We pipe input via stdin instead of -p to handle large diffs and special ch
 If the output does not follow the review format (`## Review Summary` / `## Findings` / `## Verdict`), the agent is not installed — `--agent` silently ignores unknown names. Tell the user to run `/gemini:setup`.
 ````
 
-Step 5: 手動驗證 — 帶 --spec 時出現第二個 verdict
+Step 5: 驗證組裝後的 payload 會觸發第二個 verdict
 
-在 Claude Code 中執行:
-```
-/gemini:review --spec docs/specs/gemini-review.md
-```
-Expected: 輸出同時含 `## Spec Compliance:` 與 `## Verdict:` 兩行。
+command 本身是 Markdown 指示，只有 Claude Code 讀它才會執行；subagent 無法跑 slash command。因此這一步驗的是**組裝結果**——手動拼出 command 該產生的 payload，確認 agent 端吃了會出 Spec Compliance：
 
-Step 6: 手動驗證 — 不帶 --spec 時不出現
+Run:
+```bash
+{ printf '=== REQUIREMENTS (what this change is supposed to do) ===\n'; \
+  sed -n '/^### R16/,/^### D13/p' docs/specs/gemini-review.md; \
+  printf '\n=== CHANGE UNDER REVIEW ===\n'; \
+  cat eval/test-cases/app-rename.diff; } \
+| agy --agent gemini-review --model gemini-3.6-flash-high --print-timeout 5m 2>&1 | head -50
+```
+Expected: 輸出同時含 `## Spec Compliance:` 與 `## Verdict:` 兩行。（這裡刻意餵不相干的需求配不相干的 diff，合規結果理應是 FAIL 或大量 ⚠️——重點是第二個 verdict 有出現，不是它的值。）
 
-在 Claude Code 中執行:
+Step 6: 逐字比對分隔字串
+
+Run:
+```bash
+grep -n 'REQUIREMENTS (what this change is supposed to do)\|CHANGE UNDER REVIEW' plugins/gemini/commands/review.md plugins/gemini/agy/agents/gemini-review/agent.md
 ```
-/gemini:review
-```
-Expected: 輸出含 `## Verdict:`，不含 `## Spec Compliance:`。
+Expected: 兩個檔案都出現這兩個字串，且括號內文字完全一致。任何一邊少了括號說明，agent 的條件判斷就會永遠不成立。
+
+command 側的參數解析（`--spec` 與 `--model` 混合順序、glob 展開、檔案不存在時停下）由 controller 在所有 task 完成後於主對話實跑 `/gemini:review` 驗證，不在本 task 範圍。
 
 Step 7: Commit
 
