@@ -1,0 +1,4 @@
+# Shell scripts must stay LF regardless of the contributor's core.autocrlf.
+# A CRLF shebang line fails on macOS and Linux with "bad interpreter: /bin/bash^M",
+# and the plugin hooks are executed directly by Claude Code and agy.
+*.sh text eol=lf
