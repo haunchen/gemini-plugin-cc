@@ -119,6 +119,30 @@ Pre-1.0, bump by what the change costs the user:
 
 The agent rule is not the usual "prompts are just content" case. `agy plugin install` copies agent definitions into `~/.gemini/config/plugins/`, so an edited prompt does not reach an existing user until they re-install. Because `--agent` never errors on a stale or missing agent, they get the old prompt with no indication anything is out of date. A version bump is the only signal available — so bump it, and say "re-run `/gemini:setup`" in the release notes.
 
+## Releasing
+
+Work on a branch and open a PR; `master` is protected by habit, not by rule. Squash merge — the history is one commit per release-worthy change.
+
+Before tagging:
+
+1. **Bump the version** in the three files listed above, per the table.
+2. **Update `CHANGELOG.md`.** Lead with an *Upgrading* section whenever the release needs the user to do something — for this project that is almost always "re-run `/gemini:setup`", since prompts do not travel with a plugin upgrade.
+3. **Update `assets/banner.svg`** if the release changes anything the banner states: the version pill, the command list, the backend name, or the bottom spec row. The source of truth lives in the vault at `02-Projects/03-開發工具與基礎設施/gemini-plugin-cc/banner-gemini-plugin-cc.svg` — edit there, then copy into `assets/`, and keep the two byte-identical.
+4. **Re-run the eval** if any agent prompt changed, and put the numbers in the changelog. Claims about review quality should be measured, not asserted.
+5. **Check the docs still match.** README (setup steps, command table, troubleshooting), both plugin READMEs, `docs/specs/`, and this file. A removed command or renamed env var touches more places than feels reasonable.
+
+Then tag and release:
+
+```bash
+git tag -a v0.2.0 <commit> -m "v0.2.0 — <one-line summary>"
+git push origin v0.2.0
+gh release create v0.2.0 --notes-file <notes>   # only when the banner and docs are done
+```
+
+Tags are cheap and can be pushed as soon as a version lands on `master`. A GitHub Release is the announcement — hold it until the banner and docs are ready, since that is what people see first.
+
+Record decisions as `D<n>` entries in `docs/specs/`, including the ones that get superseded — mark the old entry rather than deleting it. Several decisions in this repo were reversed once their premise expired (Pro-by-default, the quota fallback, the tool policy), and the reversals only make sense next to what they replaced.
+
 ## Design Constraints
 
 - Zero-code core: no JS runtime for `gemini` plugin (only Markdown + bash). `gemini-images` uses a Node.js hook but stays self-contained.

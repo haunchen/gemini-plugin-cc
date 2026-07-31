@@ -164,6 +164,10 @@ gemini-plugin-cc/
     └── specs/                    # Feature specs
 ```
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md). Both plugins are at 0.2.0; upgrading from 0.1.0 requires re-running `/gemini:setup`.
+
 ## License
 
 MIT
