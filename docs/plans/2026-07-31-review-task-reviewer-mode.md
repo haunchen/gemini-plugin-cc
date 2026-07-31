@@ -2,7 +2,7 @@
 
 Goal: 把 dev plugin `task-reviewer` agent 的四項審查紀律移植進 `gemini-review` agent，並新增可選 `--spec` 需求輸入以支援第二個 spec 合規 verdict。
 
-Architecture: 全部改動落在兩個 Markdown 檔——`plugins/gemini/agy/agents/gemini-review/agent.md`（system prompt，五項紀律的載體）與 `plugins/gemini/commands/review.md`（新增 `--spec` 解析與 stdin 組裝）。agent 側以「輸入中有沒有 `=== REQUIREMENTS ===` 區塊」決定是否輸出 spec 合規 verdict，不設額外旗標。驗證手段是 promptfoo eval（回歸 + 3 個新 case）與一次 agy 實測。
+Architecture: 全部改動落在兩個 Markdown 檔——`plugins/gemini/agy/agents/gemini-review/agent.md`（system prompt，五項紀律的載體）與 `plugins/gemini/commands/review.md`（新增 `--spec` 解析與 stdin 組裝）。agent 側以「輸入中有沒有 `=== REQUIREMENTS (what this change is supposed to do) ===` 區塊」決定是否輸出 spec 合規 verdict，不設額外旗標。驗證手段是 promptfoo eval（回歸 + 3 個新 case）與一次 agy 實測。
 
 Tech Stack: Markdown custom agent（agy ≥ 1.1.6）、bash、promptfoo（`npx promptfoo@latest`）。無 JS 執行期。
 
@@ -35,6 +35,8 @@ Implements: `gemini-review.md` #R17（前置驗證）
 這是設計文件風險 R1 的最小實測。`view_file` 在白名單裡，但從未在 review 路徑上驗過——agy 執行時能否用 repo 相對路徑讀檔是未知數。查不到就要在 Task 2 把「聚焦外查」降級為「明確指出使用者該自己查什麼」。
 
 用一個一次性 probe agent 隔離測試，不動正式 plugin。
+
+註：設計文件描述的驗證方式是「餵一個改函式簽章的 diff，看報告有沒有出現實際查到的呼叫點」。這裡刻意改用 probe agent 直接讀檔回報首行——那個方式同時受 prompt 措辭與模型判斷影響，測不出 `view_file` 本身能不能解析路徑；probe 把變因隔離掉，是刻意的方法調整，不是漏做。
 
 Files:
 - Create: `<scratchpad>/viewfile-probe/plugin.json`
@@ -148,7 +150,7 @@ Files:
 
 Interfaces:
 - Consumes: Task 1 的 `VIEW_FILE_WORKS`
-- Produces: agent 認得 `=== REQUIREMENTS ===` 與 `=== CHANGE UNDER REVIEW ===` 兩個分隔字串，Task 3 的 command 必須逐字產出這兩行
+- Produces: agent 認得 `=== REQUIREMENTS (what this change is supposed to do) ===` 與 `=== CHANGE UNDER REVIEW ===` 兩個分隔字串，Task 3 的 command 與 Task 4 的測試素材必須逐字產出這兩行——括號內的說明文字是字串的一部分，不可省略
 
 Step 1: 依 Task 1 結論決定外查段落
 
@@ -165,7 +167,17 @@ Step 1: 依 Task 1 結論決定外查段落
   You cannot read those files. Report the risk as a finding anyway, and state exactly what the user must check (which symbol, which kind of call site). Never state a conclusion about code you have not seen.
   ```
 
-  並在報告的 Rules 段落把「你可以查證」相關語句一併移除。
+  並把 Rules 段落的這一條：
+
+  ```
+  - Do not speculate about code you have not seen. Verifying a nameable risk with `view_file` is allowed; guessing at unseen code is not a finding.
+  ```
+
+  替換為：
+
+  ```
+  - Do not speculate about code you have not seen. You cannot read files outside the input, so an unseen-code concern is reported as a risk for the user to check, never as a conclusion.
+  ```
 
 Step 2: 全檔替換
 
@@ -226,7 +238,7 @@ Let the intent guide your severity calibration. A rename commit should only be c
 
 ### Step 1: Check Spec Compliance
 
-Do this step **only if the input contains a `=== REQUIREMENTS ===` section**. If it does not, skip this step entirely and omit the Spec Compliance section from your output.
+Do this step **only if the input contains a `=== REQUIREMENTS (what this change is supposed to do) ===` section**. If it does not, skip this step entirely and omit the Spec Compliance section from your output.
 
 Compare the change against the requirements on three axes:
 
@@ -258,7 +270,7 @@ If the answer to any of these is no, downgrade or drop the finding.
 - {Missing / Extra / Misread, each with file_path:line}
 - ⚠️ {Requirement that cannot be verified from this change + what the user should confirm}
 
-(Omit this entire section when the input has no `=== REQUIREMENTS ===` section.)
+(Omit this entire section when the input has no `=== REQUIREMENTS (what this change is supposed to do) ===` section.)
 
 ## Findings
 
@@ -289,7 +301,7 @@ If the answer to any of these is no, downgrade or drop the finding.
 
 Spec Compliance is a separate verdict and does not change this one. Incidental Findings never affect either verdict.
 
-## Incidental Findings
+## What Counts as an Incidental Finding
 
 An incidental finding is an existing bug or clear piece of technical debt in surrounding code that **this change neither introduced nor made worse**. Report it in its own section with file_path:line so the user can decide separately. Do not mix it into Findings, and do not let it turn a PASS into NEEDS_CHANGES.
 
@@ -361,7 +373,7 @@ Interfaces:
 
 Step 1: 更新 frontmatter 的 argument-hint
 
-把第 4 行：
+把 YAML frontmatter 中的 `argument-hint` 欄位：
 
 ```
 argument-hint: [file-path] [--model <model>]
@@ -394,7 +406,7 @@ Check if $ARGUMENTS contains one or more `--spec <path>` pairs:
 
 Step 3: 更新 Step 2 的參數描述
 
-把 `## Step 2: Determine input` 底下的第一行：
+把 `## Step 2: Determine input` 底下的條件句：
 
 ```
 If $ARGUMENTS (after --model removal) is provided:
@@ -415,9 +427,9 @@ Step 4: 改寫 Step 3 的 stdin 組裝
 
 The system prompt lives in the `gemini-review` agent, installed by `/gemini:setup`. The agent's `tools` whitelist keeps the run read-only — there is no separate policy file.
 
-Assemble the payload. If SPEC_INPUT is empty, the payload is REVIEW_INPUT unchanged — do **not** emit an empty REQUIREMENTS section, because the agent decides whether to return a spec-compliance verdict purely by whether that section is present.
+Assemble PAYLOAD (the variable the bash command below reads). If SPEC_INPUT is empty, PAYLOAD is REVIEW_INPUT unchanged — do **not** emit an empty REQUIREMENTS section, because the agent decides whether to return a spec-compliance verdict purely by whether that section is present.
 
-If SPEC_INPUT is non-empty, the payload is:
+If SPEC_INPUT is non-empty, PAYLOAD is:
 
 ```
 === REQUIREMENTS (what this change is supposed to do) ===
@@ -428,7 +440,7 @@ If SPEC_INPUT is non-empty, the payload is:
 
 The two `===` marker lines must be reproduced verbatim; the agent matches on them.
 
-Run the following bash command, passing the payload via stdin to avoid shell escaping issues:
+Run the following bash command, passing PAYLOAD via stdin to avoid shell escaping issues:
 
 ```bash
 output=$(printf "%s" "$PAYLOAD" | agy --agent gemini-review --model $MODEL --print-timeout 5m 2>&1)
