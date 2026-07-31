@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 
 Both plugins are versioned independently, but have moved together so far, so releases are tagged once for the repo (`v<version>`). See [CLAUDE.md](CLAUDE.md#versioning) for the bump rules.
 
-## [0.3.0] — 2026-07-31
+## [0.2.1] — 2026-07-31
 
 `/gemini:review` picks up four review disciplines ported from this repo's `dev` plugin `task-reviewer` agent, plus an optional way to hand it the requirements. The plugin also stops relying on you to remember that prompts need reinstalling.
 
@@ -84,6 +84,6 @@ Initial open-source release.
 - **`gemini-images`** — `PreToolUse` hook on `Read` that resizes an image, describes it through Gemini, runs tesseract OCR in parallel, and hands Claude the text so the prompt cache survives.
 - promptfoo eval suite with LLM-as-judge rubrics over real-world diffs.
 
-[0.3.0]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.2.0...v0.3.0
+[0.2.1]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haunchen/gemini-plugin-cc/releases/tag/v0.1.0

@@ -55,7 +55,7 @@ Restart Claude Code — plugins are not picked up until you do.
 
 Required. `agy` has no per-call system prompt injection, so setup registers the prompts with it as agents (`agy plugin install <plugin-root>/agy`) and then verifies they took effect. Expect `agents : 3 processed`.
 
-Re-run setup after upgrading the plugin — new prompt versions do not reach agy until you do. Since 0.3.0 the plugin checks this for you: at the start of a session it compares the version it ships against the one installed in agy, and prints a one-line notice if they differ. The check follows wherever you installed the plugin, so a user-scope install reports on every session and a project-scope install only inside that project. It prints nothing when the versions match.
+Re-run setup after upgrading the plugin — new prompt versions do not reach agy until you do. Since 0.2.1 the plugin checks this for you: at the start of a session it compares the version it ships against the one installed in agy, and prints a one-line notice if they differ. The check follows wherever you installed the plugin, so a user-scope install reports on every session and a project-scope install only inside that project. It prints nothing when the versions match.
 
 ## Verification
 

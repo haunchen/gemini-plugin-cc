@@ -7,7 +7,7 @@
     {
       "name": "gemini",
       "description": "Gemini via Antigravity CLI — ask, review, adversarial-review",
-      "version": "0.3.0",
+      "version": "0.2.1",
       "author": {
         "name": "Frank Chen"
       },

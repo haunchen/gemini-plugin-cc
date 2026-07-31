@@ -166,7 +166,7 @@ gemini-plugin-cc/
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). `gemini` is at 0.3.0, `gemini-images` at 0.2.0; re-run `/gemini:setup` after upgrading `gemini` — prompt changes don't reach agy on their own, though from 0.3.0 the plugin tells you when they have drifted.
+See [CHANGELOG.md](CHANGELOG.md). `gemini` is at 0.2.1, `gemini-images` at 0.2.0; re-run `/gemini:setup` after upgrading `gemini` — prompt changes don't reach agy on their own, though from 0.2.1 the plugin tells you when they have drifted.
 
 ## License
 
