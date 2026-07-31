@@ -36,6 +36,8 @@ Severity levels (`HIGH`/`MEDIUM`/`LOW`) and the main verdict (`PASS`/`NEEDS_CHAN
 
 Treat those two numbers as coarse. agy exposes no sampling controls, and across runs of this same suite the untouched bare-model arm moved by three points on its own — enough that a one- or two-point gap means nothing. What the runs do establish: the three new behaviours fire, and an early version of this prompt escalated a pure rename to `NEEDS_CHANGES`, which the LOW cap on unverifiable risks fixed.
 
+The two that slipped were `attribute-shadowing` and `incidental-findings`, both previously passing. Rerunning them uncached told different stories: `incidental-findings` swung from naming one improvement to naming all five, which is the sampling noise described above. `attribute-shadowing` reproduced its shape both times — a one-line summary, empty findings, an immediate `PASS` — which is what the prompt asks for on a clean fix, while that case's rubric wants the crash mechanism spelled out. Worth watching rather than resolved.
+
 ## [0.2.0] — 2026-07-31
 
 Migrated both plugins from Gemini CLI to the Antigravity CLI (`agy`). Gemini CLI stopped serving consumer tiers on June 18, 2026 and now returns `IneligibleTierError`.

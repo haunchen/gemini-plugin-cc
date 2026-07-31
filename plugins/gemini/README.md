@@ -93,7 +93,7 @@ Point `--spec` at whatever states the intent — a spec, a design doc, a task br
 ```
 ## Spec Compliance: FAIL
 - Missing: R3 (rate limiting on /login) — no reference in the diff
-- Extra: `retries` option in parseConfig(), not requested by any requirement
+- Extra: a "remember me" cookie set on login, not requested by any requirement
 - ⚠️ R5 (session expiry) lives in code this diff does not touch — confirm separately
 ```
 

@@ -25,6 +25,7 @@ Check if $ARGUMENTS contains one or more `--spec <path>` pairs:
   - If the path contains glob characters (* or ?), use the Glob tool to expand it, then Read each matched file
   - Otherwise, Read the single file directly
   - If a path does not exist, tell the user which one and stop — a silently missing requirements file would produce a spec-compliance verdict based on nothing
+  - If `--spec` is not followed by a value, or is followed by something starting with `--`, tell the user it needs a path and stop — do not consume the next flag as a filename
 - Remove every `--spec <value>` pair from $ARGUMENTS
 - Concatenate all spec file contents (separated by a blank line) as SPEC_INPUT
 

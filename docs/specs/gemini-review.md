@@ -189,7 +189,7 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 
 ### ADDED R20: 可選需求輸入與 Spec 合規 verdict
 - **Level**: MUST
-- **Description**: `/gemini:review` 支援可重複的 `--spec <path>`（支援 glob），command 讀檔後以 `=== REQUIREMENTS ===` / `=== CHANGE UNDER REVIEW ===` 分隔組進 stdin。有帶時 agent 額外輸出 `## Spec Compliance: PASS | FAIL`，檢查缺漏 / 多餘 / 理解偏差，無法從本次變更驗證者列 ⚠️ 並說明使用者該自行確認什麼；未帶時完全不輸出 REQUIREMENTS 區塊，agent 亦不輸出該 verdict。
+- **Description**: `/gemini:review` 支援可重複的 `--spec <path>`（支援 glob），command 讀檔後以 `=== REQUIREMENTS (what this change is supposed to do) ===` / `=== CHANGE UNDER REVIEW ===` 分隔組進 stdin。有帶時 agent 額外輸出 `## Spec Compliance: PASS | FAIL`，檢查缺漏 / 多餘 / 理解偏差，無法從本次變更驗證者列 ⚠️ 並說明使用者該自行確認什麼；未帶時完全不輸出 REQUIREMENTS 區塊，agent 亦不輸出該 verdict。
 
 ### MODIFIED R4: 結構化 Review 輸出
 - **Level**: MUST
@@ -201,6 +201,6 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Date**: 2026-07-31
 
 ### D14: `--spec` 以區塊存在與否切換雙 verdict（待實作確認）
-- **Decision**: 新增可選 `--spec <path>`，以 stdin 內有無 `=== REQUIREMENTS ===` 區塊決定是否輸出 Spec Compliance verdict，不另設旗標
+- **Decision**: 新增可選 `--spec <path>`，以 stdin 內有無 `=== REQUIREMENTS (what this change is supposed to do) ===` 區塊決定是否輸出 Spec Compliance verdict，不另設旗標
 - **Rationale**: task-reviewer 能判 spec 合規是因派遣訊息附了需求原文，gemini-review 原本只吃 diff。可選輸入補上這一層而不強迫每次都要準備需求檔；用區塊存在性當開關，prompt 側零額外狀態
 - **Date**: 2026-07-31
