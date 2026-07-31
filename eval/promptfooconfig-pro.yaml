@@ -1,10 +1,10 @@
-description: "Gemini CLI review — Pro model comparison"
+description: "Review agent eval — Pro model comparison"
 
 providers:
-  - id: "exec: bash ./run-gemini-default-pro.sh"
-    label: "gemini-pro-default"
-  - id: "exec: bash ./run-gemini-pro.sh"
-    label: "gemini-pro-custom"
+  - id: "exec: bash ./run-agy.sh - gemini-3.1-pro-high"
+    label: "agy-pro-default"
+  - id: "exec: bash ./run-agy.sh gemini-review gemini-3.1-pro-high"
+    label: "agy-pro-custom"
 
 prompts:
   - "Review the following code diff for bugs, security issues, and code quality problems:\n\n{{diff}}"
@@ -12,7 +12,7 @@ prompts:
 defaultTest:
   options:
     provider:
-      id: anthropic:messages:claude-sonnet-4-20250514
+      id: anthropic:messages:claude-sonnet-5
       config:
         apiKeyRequired: false
 
