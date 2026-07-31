@@ -1,10 +1,10 @@
-description: "Gemini CLI security-review system prompt eval — Pro model（對齊 production 預設）"
+description: "Security-review agent eval (Pro) — PARKED: see promptfooconfig-security.yaml"
 
 providers:
-  - id: "exec: bash ./run-gemini-security-default-pro.sh"
-    label: "gemini-security-pro-default"
-  - id: "exec: bash ./run-gemini-security-pro.sh"
-    label: "gemini-security-pro-custom"
+  - id: "exec: bash ./run-agy.sh - gemini-3.1-pro-high"
+    label: "agy-security-pro-default"
+  - id: "exec: bash ./run-agy.sh gemini-security-review gemini-3.1-pro-high"
+    label: "agy-security-pro-custom"
 
 prompts:
   - "Perform a security review of the following code change. Identify any vulnerabilities:\n\n{{diff}}"
@@ -12,7 +12,7 @@ prompts:
 defaultTest:
   options:
     provider:
-      id: anthropic:messages:claude-sonnet-4-20250514
+      id: anthropic:messages:claude-sonnet-5
       config:
         apiKeyRequired: false
 

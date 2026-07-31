@@ -8,7 +8,7 @@ See [CLAUDE.md](CLAUDE.md) for the architecture overview. The short version:
 
 - `plugins/gemini/` — slash-command plugin (Markdown + bash, no runtime)
 - `plugins/gemini-images/` — PreToolUse hook plugin (Node.js + bash)
-- `eval/` — promptfoo configs that compare default vs custom system prompts
+- `eval/` — promptfoo configs that compare the bare model vs the custom agents
 - `docs/plans/`, `docs/specs/` — design docs and specs
 
 ## Development workflow
@@ -20,37 +20,53 @@ See [CLAUDE.md](CLAUDE.md) for the architecture overview. The short version:
    claude plugin install gemini --scope project
    # restart Claude Code session
    ```
-3. Iterate on commands or system prompts. Commands are pure Markdown — no build step.
-4. For `gemini-images`, run `bash plugins/gemini-images/scripts/doctor.sh` to verify dependencies (jq, tesseract, optionally imagemagick).
+3. Install the agents into agy — the plugins cannot apply their system prompts without this:
+   ```bash
+   agy plugin install "$(pwd)/plugins/gemini/agy"           # expect: agents : 3 processed
+   agy plugin install "$(pwd)/plugins/gemini-images/agy"    # expect: agents : 1 processed
+   ```
+4. Iterate. Commands are pure Markdown and take effect on the next run — no build step.
+
+   **Agent definitions do not.** `agy plugin install` *copies* them into `~/.gemini/config/plugins/`, so after editing any `agy/agents/*/agent.md` you must re-run the install for that plugin. Skip it and you will keep testing the previous prompt while reading the new one — and since `--agent` never errors, nothing will tell you.
+5. For `gemini-images`, run `bash plugins/gemini-images/scripts/doctor.sh` to verify dependencies (jq, tesseract, optionally imagemagick) and that the agent is installed.
 
 ## Running the eval suite
 
-The `eval/` directory uses [promptfoo](https://www.promptfoo.dev/) to compare the default Gemini system prompt against this repo's custom prompt across realistic diffs.
+The `eval/` directory uses [promptfoo](https://www.promptfoo.dev/) to compare the bare model against this repo's custom agents across realistic diffs.
+
+Install the agents first — an unknown `--agent` name is silently ignored, so a missing install quietly grades as baseline:
 
 ```bash
-# Code review eval (default vs custom × flash vs pro)
-eval/run-gemini.sh                 # custom prompt × flash
-eval/run-gemini-pro.sh             # custom prompt × pro
-eval/run-gemini-default.sh         # default prompt × flash
-eval/run-gemini-default-pro.sh     # default prompt × pro
-
-# Security review eval
-eval/run-gemini-security.sh
-eval/run-gemini-security-pro.sh
-eval/run-gemini-security-default.sh
-eval/run-gemini-security-default-pro.sh
+agy plugin install "$(pwd)/plugins/gemini/agy"
 ```
 
-Eval runs hit live Gemini quota — keep a `GEMINI_API_KEY` handy or be signed in via `gemini` OAuth.
+```bash
+cd eval
+npx promptfoo@latest eval -c promptfooconfig.yaml               # review, flash
+npx promptfoo@latest eval -c promptfooconfig-pro.yaml           # review, pro
 
-When changing a system prompt, run the relevant eval before and after. A useful guard rail: the custom prompt should not regress on cases the default prompt already passes.
+# Parked — the security-review command was removed in v0.2.0 (agy declines
+# security-audit requests). Configs and test cases are kept for its return.
+# npx promptfoo@latest eval -c promptfooconfig-security.yaml
+# npx promptfoo@latest eval -c promptfooconfig-security-pro.yaml
+```
+
+Each config runs two providers — bare model vs custom agent — through the shared `run-agy.sh <agent|-> <model-slug>` runner.
+
+Use promptfoo `@latest`. Older releases send a deprecated `temperature` to current judge models, which fails every grading call with a 400 and reports 0% pass regardless of output quality. A retired judge model gives the same misleading result via 404 — if every case fails, check `gradingResult` before blaming the model under test.
+
+Eval runs hit live agy quota — be signed in via `agy` OAuth.
+
+Expect more run-to-run variance than the pre-0.2.0 numbers. Gemini CLI was pinned to `temperature: 0` through `.gemini/settings.json`; agy exposes no sampling controls at all, so that file was removed and there is nothing to replace it with. Treat a one-case difference between runs as noise, not a regression.
+
+When changing an agent's system prompt, run the relevant eval before and after. A useful guard rail: the custom prompt should not regress on cases the bare model already passes.
 
 ## PR checklist
 
 - [ ] Slash commands still work after restart (`/gemini:setup` ≥ smoke test)
-- [ ] If you touched a system prompt, ran the matching eval suite and the diff is non-regressive
+- [ ] If you touched an agent's system prompt, re-ran `agy plugin install` and the matching eval suite, and the diff is non-regressive
 - [ ] If you touched `gemini-images/hooks/`, `doctor.sh` still passes on your OS
-- [ ] No secrets, API keys, or personal paths in commits (the read-only policy at `plugins/gemini/policies/readonly.toml` is the second line of defense — keep it strict)
+- [ ] No secrets, API keys, or personal paths in commits (the `tools` whitelist in each `agy/agents/*/agent.md` is the second line of defense — keep it minimal)
 - [ ] README / CLAUDE.md updated if behavior changed
 
 ## Reporting issues
@@ -58,6 +74,6 @@ When changing a system prompt, run the relevant eval before and after. A useful 
 Please include:
 
 - OS + shell (macOS / Windows Git Bash)
-- `claude --version` and `gemini --version`
+- `claude --version` and `agy --version`
 - The slash command + arguments you ran
 - Console output (redact any paths or secrets)

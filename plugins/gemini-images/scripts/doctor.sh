@@ -44,19 +44,26 @@ check_file() {
 }
 
 echo "== Required =="
-check_required_cmd gemini
+check_required_cmd agy
 check_required_cmd node
 check_required_cmd jq
 check_file "$PLUGIN_DIR/.claude-plugin/plugin.json"
 check_file "$PLUGIN_DIR/hooks/intercept-image-read.sh"
 check_file "$PLUGIN_DIR/hooks/image-describe.mjs"
-check_file "$PLUGIN_DIR/system-prompts/image-describe.md"
+check_file "$PLUGIN_DIR/agy/agents/gemini-image-describe/agent.md"
 
-if command -v gemini >/dev/null 2>&1; then
-  if gemini --help >/dev/null 2>&1; then
-    ok "gemini CLI runnable"
+if command -v agy >/dev/null 2>&1; then
+  if agy --help >/dev/null 2>&1; then
+    ok "agy runnable"
   else
-    fail "gemini CLI installed but fails to run (check OAuth)"
+    fail "agy installed but fails to run (check OAuth)"
+  fi
+  # --agent silently ignores unknown names, so a missing agent install shows up
+  # as a generic description rather than an error. Check the file instead.
+  if [ -f "$HOME/.gemini/config/plugins/gemini-images-agents/agents/gemini-image-describe/agent.md" ]; then
+    ok "agent installed: gemini-image-describe"
+  else
+    fail "agent missing: run 'agy plugin install $PLUGIN_DIR/agy'"
   fi
 fi
 
@@ -78,14 +85,14 @@ if [ "$VERBOSE" = "1" ]; then
   echo
   echo "== Environment =="
   echo "PLUGIN_DIR: $PLUGIN_DIR"
-  echo "GEMINI_MODEL: ${GEMINI_MODEL:-flash (default)}"
+  echo "AGY_MODEL: ${AGY_MODEL:-gemini-3.6-flash-high (default)}"
   echo "MAX_WIDTH: ${MAX_WIDTH:-1568 (default)}"
   echo "OCR_BIN: ${OCR_BIN:-tesseract (default)}"
-  echo "GEMINI_BIN: ${GEMINI_BIN:-gemini (default)}"
+  echo "AGY_BIN: ${AGY_BIN:-agy (default)}"
   echo "TMPDIR: ${TMPDIR:-/tmp (default)}"
   echo "OS: $(uname -s)"
-  if command -v gemini >/dev/null 2>&1; then
-    echo "gemini version: $(gemini --version 2>/dev/null | head -1)"
+  if command -v agy >/dev/null 2>&1; then
+    echo "agy version: $(agy --version 2>/dev/null | head -1)"
   fi
   if command -v node >/dev/null 2>&1; then
     echo "node version: $(node --version)"

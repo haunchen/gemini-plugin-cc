@@ -1,10 +1,10 @@
-description: "Gemini CLI security-review system prompt eval (flash)"
+description: "Security-review agent eval — PARKED: the security-review command was removed in v0.2.0 because agy refuses security-audit requests (17/20 calls refused). Test cases and rubrics are kept for whenever the command comes back."
 
 providers:
-  - id: "exec: bash ./run-gemini-security-default.sh"
-    label: "gemini-security-default"
-  - id: "exec: bash ./run-gemini-security.sh"
-    label: "gemini-security-custom"
+  - id: "exec: bash ./run-agy.sh - gemini-3.6-flash-high"
+    label: "agy-security-flash-default"
+  - id: "exec: bash ./run-agy.sh gemini-security-review gemini-3.6-flash-high"
+    label: "agy-security-flash-custom"
 
 prompts:
   - "Perform a security review of the following code change. Identify any vulnerabilities:\n\n{{diff}}"
@@ -12,7 +12,7 @@ prompts:
 defaultTest:
   options:
     provider:
-      id: anthropic:messages:claude-sonnet-4-20250514
+      id: anthropic:messages:claude-sonnet-5
       config:
         apiKeyRequired: false
 

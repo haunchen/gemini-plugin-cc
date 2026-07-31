@@ -6,8 +6,8 @@
   "plugins": [
     {
       "name": "gemini",
-      "description": "Gemini CLI integration — ask, review, security-review, adversarial-review",
-      "version": "0.1.0",
+      "description": "Gemini via Antigravity CLI — ask, review, adversarial-review",
+      "version": "0.2.0",
       "author": {
         "name": "Frank Chen"
       },
@@ -17,7 +17,7 @@
     {
       "name": "gemini-images",
       "description": "Intercept Read on image files and replace with Gemini text descriptions to protect prompt cache",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "author": {
         "name": "Frank Chen"
       },

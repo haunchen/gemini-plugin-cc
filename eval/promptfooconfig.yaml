@@ -1,10 +1,10 @@
-description: "Gemini CLI review system prompt eval"
+description: "Review agent eval — custom system prompt vs bare model (flash)"
 
 providers:
-  - id: "exec: bash ./run-gemini-default.sh"
-    label: "gemini-default"
-  - id: "exec: bash ./run-gemini.sh"
-    label: "gemini-custom-review"
+  - id: "exec: bash ./run-agy.sh - gemini-3.6-flash-high"
+    label: "agy-flash-default"
+  - id: "exec: bash ./run-agy.sh gemini-review gemini-3.6-flash-high"
+    label: "agy-flash-custom"
 
 prompts:
   - "Review the following code diff for bugs, security issues, and code quality problems:\n\n{{diff}}"
@@ -12,7 +12,7 @@ prompts:
 defaultTest:
   options:
     provider:
-      id: anthropic:messages:claude-sonnet-4-20250514
+      id: anthropic:messages:claude-sonnet-5
       config:
         apiKeyRequired: false
 

@@ -4,10 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A Claude Code plugin marketplace that integrates Gemini CLI. Two plugins share the same Gemini OAuth credentials:
+A Claude Code plugin marketplace that reaches Gemini through the Antigravity CLI (`agy`). Two plugins share the same Google OAuth credentials:
 
-- **`gemini`** — slash commands for code review, ask, adversarial review, security review. Pure Markdown commands + system prompts, no JS runtime.
+- **`gemini`** — slash commands for code review, ask, adversarial review. Pure Markdown commands + agent definitions, no JS runtime.
 - **`gemini-images`** — PreToolUse hook that replaces image `Read` calls with Gemini-generated text descriptions, protecting Anthropic's prompt cache.
+
+Everything user-facing stays in Claude Code. `agy` is only the backend that runs Gemini — the plugins are not installed into agy as skills.
 
 ## Architecture
 
@@ -17,32 +19,56 @@ Marketplace registry at `/.claude-plugin/marketplace.json` points at two plugin 
 .claude-plugin/marketplace.json          # marketplace registry (2 plugins)
 plugins/gemini/
   .claude-plugin/plugin.json
-  commands/                              # /gemini:setup, review, ask, adversarial-review, security-review
-  system-prompts/                        # injected via GEMINI_SYSTEM_MD when invoking Gemini CLI
-  policies/readonly.toml                 # shared read-only admin policy
+  commands/                              # /gemini:setup, review, ask, adversarial-review
+  agy/plugin.json                        # agy-side plugin — agents only, no commands
+  agy/agents/<name>/agent.md             # system prompts, installed via `agy plugin install`
+  README.md
 plugins/gemini-images/
   .claude-plugin/plugin.json             # registers PreToolUse hook on Read
   hooks/intercept-image-read.sh          # entry point
-  hooks/image-describe.mjs               # resize + Gemini describe + parallel tesseract OCR
-  system-prompts/image-describe.md
+  hooks/image-describe.mjs               # resize + agy describe + parallel tesseract OCR
+  agy/agents/gemini-image-describe/agent.md
   scripts/doctor.sh                      # dependency check
+  README.md
 ```
 
-System prompts in `plugins/gemini/system-prompts/*.md` are the primary quality lever — they define reviewer role, output structure, and severity criteria.
+The agent bodies are the primary quality lever — they define reviewer role, output structure, and severity criteria. Eval: custom prompt 10/10 vs bare model 4/10.
+
+## How System Prompts Reach agy
+
+`agy` has no per-call system prompt injection (no `GEMINI_SYSTEM_MD` equivalent). Prompts must be registered up front as Markdown custom agents (requires agy ≥ 1.1.6):
+
+```
+---
+name: gemini-review
+mainAgent: true
+tools: [view_file, find_by_name]    # replaces the old --admin-policy readonly.toml
+---
+
+# Agent System Instructions        ← this exact H1 is the delimiter; anything else is silently ignored
+
+<prompt body>
+```
+
+`/gemini:setup` installs them with `agy plugin install <plugin-root>/agy`, landing in `~/.gemini/config/plugins/gemini-agents/`. The agy-side plugin deliberately ships agents only — including `commands/` would make agy convert them into skills carrying unusable Claude Code syntax (`$ARGUMENTS`, `allowed-tools`).
+
+**`--agent` silently ignores unknown names.** A failed install produces plausible output with no system prompt applied and no error, so both `/gemini:setup` and `doctor.sh` verify the install explicitly.
 
 ## How `gemini` Commands Work
 
-Commands are Markdown files with YAML frontmatter (`description`, `allowed-tools`, `argument-hint`). Claude Code reads and executes the instructions within. The review / ask / etc. commands pipe input to Gemini CLI via stdin:
+Commands are Markdown files with YAML frontmatter (`description`, `allowed-tools`, `argument-hint`). Claude Code reads and executes the instructions within. The review / ask / etc. commands pipe input to agy via stdin:
 
 ```bash
-echo "$INPUT" | GEMINI_SYSTEM_MD="$PATH" gemini -m "$MODEL" --admin-policy "$POLICY" 2>&1
+echo "$INPUT" | agy --agent gemini-review --model "$MODEL" --print-timeout 5m 2>&1
 ```
 
-Default model is `pro` for review / adversarial-review / security-review and `flash` for ask, all with automatic fallback to `flash` on quota / rate-limit errors. Users can override with `--model <m>`.
+All commands default to `gemini-3.6-flash-high` with effort pinned to `high`. There is no automatic fallback: a quota / rate-limit error surfaces to the user, who can retry or pick another model with `--model`.
+
+The old pro-by-default routing is gone: agy's Pro is `gemini-3.1-pro`, two generations behind 3.6 flash, and flash-high already scores 10/10 on the eval suite. `--model pro` still resolves to `gemini-3.1-pro-high` for explicit opt-in, and any other value passes through to agy unchanged (`agy models` lists the slugs).
 
 ## How `gemini-images` Works
 
-`PreToolUse` hook fires on every `Read`. If the path matches an image extension, the hook resizes (magick → sips → skip), spawns Gemini CLI to describe it, runs tesseract OCR in parallel, writes the combined output to a temp `desc.txt`, and rewrites `updatedInput.file_path` so Claude reads text instead of image bytes. Keeps the prompt cache warm.
+`PreToolUse` hook fires on every `Read`. If the path matches an image extension, the hook resizes (magick → sips → skip), spawns agy to describe it, runs tesseract OCR in parallel, writes the combined output to a temp `desc.txt`, and rewrites `updatedInput.file_path` so Claude reads text instead of image bytes. Keeps the prompt cache warm.
 
 ## Testing
 
@@ -53,19 +79,50 @@ Default model is `pro` for review / adversarial-review / security-review and `fl
    - `claude plugin install gemini --scope project` (and/or `gemini-images`)
    - Restart Claude Code session (plugins require restart)
    - Alternative for one-off testing: `claude --plugin-dir .`
-2. `/gemini:setup` — verify CLI, version, OAuth
-3. `/gemini:review` — review current git diff
-4. `/gemini:review path/to/file` — review specific file
-5. `bash plugins/gemini-images/scripts/doctor.sh` — verify gemini-images dependencies
+2. `/gemini:setup` — verify agy, version (≥ 1.1.6), OAuth, install the agents, and confirm they took effect
+3. `agy plugin install "$(pwd)/plugins/gemini-images/agy"` — gemini-images has no setup command of its own
+4. `/gemini:review` — review current git diff
+5. `/gemini:review path/to/file` — review specific file
+6. `bash plugins/gemini-images/scripts/doctor.sh` — verify gemini-images dependencies and agent install
+
+**After editing any `agy/agents/*/agent.md`, re-run `agy plugin install` for that plugin.** Install copies the agents into `~/.gemini/config/plugins/`; without a re-install you keep exercising the old prompt, and `--agent` will not tell you.
 
 ### Eval suite
 
-`eval/` ships promptfoo configs for the review command (default prompt vs custom prompt × flash vs pro) and the security-review command. Run via `eval/run-gemini*.sh` scripts. See `CONTRIBUTING.md` for the workflow.
+`eval/` ships promptfoo configs comparing the custom agent against the bare model, both arms going through one runner: `run-agy.sh <agent|-> <model-slug>`, where `-` means no agent. Invoke the configs with `npx promptfoo@latest eval -c <config>`, not the runner directly. See `CONTRIBUTING.md` for the workflow.
+
+The two `promptfooconfig-security*.yaml` configs are PARKED — the command they target was removed (see D12). Their test cases and rubrics are kept for whenever it comes back.
+
+agy exposes no sampling controls, so eval runs vary more than the pre-0.2.0 numbers, which were pinned to `temperature: 0` via a `.gemini/settings.json` that no longer applies.
+
+Judge note: the rubric provider must be a current model. `claude-sonnet-4-20250514` is retired (404) and promptfoo ≤ 0.121.5 sends a deprecated `temperature` to newer models (400) — either failure grades every case FAIL regardless of output quality. Use promptfoo `@latest`.
+
+## Versioning
+
+The two plugins version independently — bump only the one you changed. They happen to both sit at 0.2.0 because the agy migration touched both.
+
+A version lives in **three** files per plugin, and they must move together:
+
+```
+.claude-plugin/marketplace.json          # the plugin's entry in the plugins[] array
+plugins/<plugin>/.claude-plugin/plugin.json
+plugins/<plugin>/agy/plugin.json         # follows its parent plugin's version
+```
+
+Pre-1.0, bump by what the change costs the user:
+
+| Change | Bump |
+|--------|------|
+| A command is added or removed, an env var is renamed, a newer agy is required, or the install flow changes | MINOR |
+| **Any edit to `agy/agents/*/agent.md`**, a bug fix, or a change to a command's internals | PATCH |
+| Docs, eval configs, CI | none |
+
+The agent rule is not the usual "prompts are just content" case. `agy plugin install` copies agent definitions into `~/.gemini/config/plugins/`, so an edited prompt does not reach an existing user until they re-install. Because `--agent` never errors on a stale or missing agent, they get the old prompt with no indication anything is out of date. A version bump is the only signal available — so bump it, and say "re-run `/gemini:setup`" in the release notes.
 
 ## Design Constraints
 
 - Zero-code core: no JS runtime for `gemini` plugin (only Markdown + bash). `gemini-images` uses a Node.js hook but stays self-contained.
 - Review output must be returned verbatim from Gemini — do not reformat or summarize.
-- Gemini CLI is invoked with `--admin-policy plugins/gemini/policies/readonly.toml`, restricting it to `read_file` + `glob`. Single shared policy across review / ask / adversarial-review / security-review; setup does not call Gemini so it is unaffected.
-- Do not change `--approval-mode` to work around the policy — the read-only restriction is intentional and the default mode avoids Issue #20469 where some approval modes bypass policies.
+- Read-only is enforced by the `tools` whitelist in each agent's frontmatter (`view_file`, `find_by_name`), replacing the old `--admin-policy readonly.toml`. This is strictly stronger: the tools are absent from the agent rather than denied, so even `--dangerously-skip-permissions` cannot write files or run shell commands. Verified by `/gemini:setup` step 6.
+- Never add `--dangerously-skip-permissions` to a plugin invocation. The whitelist holds without it, and the flag would only matter for tools the agents should not have.
 - Specs live in `docs/specs/`, design docs in `docs/plans/`.

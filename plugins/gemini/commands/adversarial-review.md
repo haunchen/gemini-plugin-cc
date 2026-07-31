@@ -4,15 +4,18 @@ allowed-tools: Bash, Read, Glob
 argument-hint: [file-path] [--model <model>]
 ---
 
-Get a devil's advocate review using Gemini CLI. Instead of finding bugs, this challenges your design decisions and proposes alternatives.
+Get a devil's advocate review using Gemini via the Antigravity CLI (`agy`). Instead of finding bugs, this challenges your design decisions and proposes alternatives.
 
 ## Step 1: Parse --model parameter
 
 Check if $ARGUMENTS contains `--model <value>`:
 - If yes: extract the value as MODEL, remove `--model <value>` from $ARGUMENTS
-- If no: set MODEL = pro
+- If no: set MODEL = flash
 
-Valid model values: flash, pro, flash-lite, or any full model name.
+Map the alias to an agy model slug:
+- `flash` → `gemini-3.6-flash-high` (the default)
+- `pro` → `gemini-3.1-pro-high` — an older generation than 3.6 flash; available for explicit opt-in, not recommended
+- Anything else is passed through unchanged (run `agy models` to list available slugs).
 
 ## Step 2: Determine input
 
@@ -27,35 +30,28 @@ If $ARGUMENTS is empty:
 - If still empty, tell the user: "No changes found. Provide a file path or make some changes first."
 - Store the diff output as REVIEW_INPUT
 
-## Step 3: Locate system prompt and policy
+## Step 3: Call agy
 
-Determine the absolute path to the plugin root (the parent of the `commands/` directory containing this file).
-
-- `system-prompts/adversarial-review.md` → SYSTEM_PROMPT_PATH
-- `policies/readonly.toml` → POLICY_PATH
-
-## Step 4: Call Gemini CLI
+The system prompt lives in the `gemini-adversarial-review` agent, installed by `/gemini:setup`. The agent's `tools` whitelist keeps the run read-only — there is no separate policy file.
 
 Run the following bash command, passing REVIEW_INPUT via stdin:
 
 ```bash
-output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -m $MODEL --admin-policy "$POLICY_PATH" 2>&1)
-exit_code=$?
-if [ $exit_code -ne 0 ] && echo "$output" | grep -qi "429\|quota\|RESOURCE_EXHAUSTED\|rate limit\|overloaded"; then
-  echo "[Fallback] $MODEL unavailable (quota/rate limit), retrying with flash..." >&2
-  output=$(printf "%s" "$REVIEW_INPUT" | GEMINI_SYSTEM_MD="$SYSTEM_PROMPT_PATH" gemini -m flash --admin-policy "$POLICY_PATH" 2>&1)
-fi
+output=$(printf "%s" "$REVIEW_INPUT" | agy --agent gemini-adversarial-review --model $MODEL --print-timeout 5m 2>&1)
 echo "$output"
 ```
 
-Note: We pipe input via stdin instead of -p flag to handle large diffs and special characters safely. If the preferred model hits quota limits, it automatically falls back to flash.
+Note: We pipe input via stdin instead of -p to handle large diffs and special characters safely.
 
-## Step 5: Present results
+If the output does not follow the agent's expected structure, the agent is not installed — `--agent` silently ignores unknown names. Tell the user to run `/gemini:setup`.
+
+## Step 4: Present results
 
 Show the Gemini response directly to the user. Do not modify, summarize, or reformat it.
 
 ## Error handling
 
-- If `gemini` command is not found: suggest running `/gemini:setup` first
-- If the command fails with an auth error: suggest running `gemini` interactively to re-authenticate via Google OAuth
+- If `agy` command is not found: suggest running `/gemini:setup` first
+- If the command fails with an auth error: suggest running `agy` interactively to re-authenticate via Google OAuth
+- If the output reports a quota or rate-limit error (429, RESOURCE_EXHAUSTED, overloaded): show it as-is and suggest retrying later, or picking a different model with `--model` (`agy models` lists the slugs). There is no automatic fallback
 - If the command times out or returns an error: show the error message and suggest retrying

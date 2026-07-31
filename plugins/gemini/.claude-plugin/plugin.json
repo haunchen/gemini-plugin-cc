@@ -1,7 +1,7 @@
 {
   "name": "gemini",
-  "version": "0.1.0",
-  "description": "Gemini CLI integration for Claude Code — ask, review, security-review, adversarial-review",
+  "version": "0.2.0",
+  "description": "Gemini via Antigravity CLI for Claude Code — ask, review, adversarial-review",
   "author": {
     "name": "Frank Chen"
   },
