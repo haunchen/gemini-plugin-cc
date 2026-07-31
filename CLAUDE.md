@@ -22,12 +22,14 @@ plugins/gemini/
   commands/                              # /gemini:setup, review, ask, adversarial-review
   agy/plugin.json                        # agy-side plugin — agents only, no commands
   agy/agents/<name>/agent.md             # system prompts, installed via `agy plugin install`
+  README.md
 plugins/gemini-images/
   .claude-plugin/plugin.json             # registers PreToolUse hook on Read
   hooks/intercept-image-read.sh          # entry point
   hooks/image-describe.mjs               # resize + agy describe + parallel tesseract OCR
   agy/agents/gemini-image-describe/agent.md
   scripts/doctor.sh                      # dependency check
+  README.md
 ```
 
 The agent bodies are the primary quality lever — they define reviewer role, output structure, and severity criteria. Eval: custom prompt 10/10 vs bare model 4/10.

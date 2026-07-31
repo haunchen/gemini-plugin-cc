@@ -151,7 +151,8 @@ gemini-plugin-cc/
 │   ├── gemini/                   # Slash-command plugin
 │   │   ├── .claude-plugin/plugin.json
 │   │   ├── commands/             # Claude Code slash commands
-│   │   └── agy/agents/           # System prompts, installed into agy
+│   │   ├── agy/agents/           # System prompts, installed into agy
+│   │   └── README.md
 │   └── gemini-images/            # PreToolUse hook plugin
 │       ├── .claude-plugin/plugin.json
 │       ├── hooks/
