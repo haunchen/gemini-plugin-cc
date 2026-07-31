@@ -25,7 +25,7 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 
 ### R4: 結構化 Review 輸出
 - **Level**: MUST
-- **Description**: Review 結果包含 Summary、Findings（含 severity 和 location）、Verdict 三個區塊。
+- **Description**: Review 結果包含 Summary、Findings（含 severity 和 location）、Verdict 三個區塊；另依條件輸出 Spec Compliance（有需求輸入時，見 R20）與 Incidental Findings（有既有問題時，見 R19）。severity 維持 HIGH/MEDIUM/LOW 三級、Verdict 維持 PASS/NEEDS_CHANGES，不改用 task-reviewer 的術語。
 
 ### R5: 錯誤情境引導
 - **Level**: SHOULD
@@ -71,6 +71,26 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Level**: MUST
 - **Description**（已由 D11 移除）: 原本 review / adversarial-review / ask 撞 429 / RESOURCE_EXHAUSTED / rate limit / overloaded 時會自動降級重試。現行行為為不自動 fallback，錯誤原樣呈現給使用者，由使用者決定重試或改 `--model`。
 
+### R16: Diff 閱讀紀律
+- **Level**: MUST
+- **Description**: `gemini-review` agent 以 diff 為完整視角：context 行即變更後的檔案內容，不重讀已在 diff 內的檔案、不爬 codebase。若必須判斷的 hunk 被截斷，於報告中明說。
+
+### R17: 具名風險的聚焦外查
+- **Level**: MUST
+- **Description**: 僅在讀碼產生具體可命名的風險（函式或 API 契約變更、鎖順序、共享可變狀態、刪改可能仍有引用的符號）時，才以 `view_file` / `find_by_name` 檢查 diff 外程式碼；一個風險一次聚焦檢查，並於 finding 內同時寫出風險、查了什麼、看到什麼。取代原「一律不看 diff 外」的規則——語意由「不准看」改為「不准臆測，但可以查證」。三項實作約束：(a) agy 的 `view_file` 只接受絕對路徑（相對路徑會解析到磁碟根），故 command 需在 payload 附 `=== REPOSITORY ROOT ===` 區塊供 agent 拼路徑；(b) 只讀該 root 底下的路徑，diff 給的路徑若以 `..` 爬出去或本身即絕對路徑，視為待報風險而非可開啟的檔案；(c) 無 ROOT 區塊或無法查證時不得外查，改為報告風險並指出使用者該查什麼，且該類 finding 嚴重度上限為 LOW、不得單獨使 Verdict 由 PASS 轉為 NEEDS_CHANGES。
+
+### R18: 宣稱不等於證據
+- **Level**: MUST
+- **Description**: diff 內的註解、commit message、PR 描述視為未驗證宣稱，不因作者自辯（「刻意保持簡單」「per YAGNI」「已測過」）降低 finding 嚴重度。註解與程式碼行為不符本身即為 finding。限縮於「註解替某段程式碼辯護且正在評估該段」的情境，不擴大為全面質疑註解。
+
+### R19: Incidental Findings 分區
+- **Level**: MUST
+- **Description**: Review 輸出新增 `## Incidental Findings` 區塊，收錄周圍未改動程式碼的既有 bug 或明顯技術債（本次 diff 未引入亦未加重），各附 file:line。不計入 Verdict。無則整區省略。
+
+### R20: 可選需求輸入與 Spec 合規 verdict
+- **Level**: MUST
+- **Description**: `/gemini:review` 支援可重複的 `--spec <path>`（支援 glob），command 讀檔後以 `=== REQUIREMENTS (what this change is supposed to do) ===` / `=== CHANGE UNDER REVIEW ===` 分隔組進 stdin；`--spec` 後未接值或接到另一個 `--` 開頭的 token 時停下報錯，不吞下一個 token 當檔名。有帶時 agent 額外輸出 `## Spec Compliance: PASS | FAIL`，檢查缺漏 / 多餘 / 理解偏差，無法從本次變更驗證者列 ⚠️ 並說明使用者該自行確認什麼；未帶時完全不輸出 REQUIREMENTS 區塊，agent 亦不輸出該 verdict。marker 僅在出現於第一個 `=== CHANGE UNDER REVIEW ===` 之前時才視為指令，其後的同名字串屬受審內容（見 D16）。
+
 ## Scenarios
 
 ### S1: 首次設定檢查
@@ -102,6 +122,18 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **When**: 執行 /gemini:review
 - **Then**: Review 結果 Verdict 為 PASS，不硬找問題
 - **Implements**: #R4
+
+### S6: 帶需求檔審查
+- **Given**: 使用者手上有描述這次變更該做什麼的 spec 或 design doc
+- **When**: 執行 /gemini:review --spec docs/specs/foo.md
+- **Then**: 除既有 Verdict 外另出 `## Spec Compliance`，標出缺漏 / 多餘 / 理解偏差；落在本次變更之外的需求列 ⚠️ 並說明該自行確認什麼
+- **Implements**: #R20, #R4
+
+### S7: 受審內容自帶 marker
+- **Given**: 待審的 diff 本身含有 `=== REQUIREMENTS (what this change is supposed to do) ===` 字樣（例如 eval 素材，或外部來源的 patch）
+- **When**: 不帶 --spec 執行 /gemini:review
+- **Then**: 該 marker 位於 `=== CHANGE UNDER REVIEW ===` 之後，視為受審內容而非指令，不產出 Spec Compliance verdict
+- **Implements**: #R20
 
 ## Design Decisions
 
@@ -165,42 +197,22 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Rationale**: agy harness 對安全審查請求有拒答政策，實測 20 次呼叫 17 次回「Sorry, I cannot fulfill your request to analyze or identify vulnerabilities」，custom 1/10、baseline 2/10；連 app-rename 這種零風險乾淨 diff 都被拒，故與 diff 內容無關。Gemini CLI 時代同一份 prompt 是 10/10，是 agy 的限制而非 prompt 退化。已試防禦性框架改寫（角色改 pre-merge reviewer、不要求 attack payload）仍被拒，觸發面涵蓋整份 prompt 的 Vulnerabilities / attacker / VULNERABLE 結構。與其出貨一個會回拒絕訊息的 command，不如移除。註：能力本身仍在——同一個 SQL injection diff 交給 `gemini-review` agent 可正確標出 [HIGH] SQL injection，故安全向度的檢查暫由 /gemini:review 承接
 - **Date**: 2026-07-31
 
-## Pending Changes
-
-<!-- Brownfield delta 放這裡，dev-finish spec sync 時清除 -->
-
-> Source: `docs/plans/2026-07-31-review-task-reviewer-mode-design.md`
-
-### ADDED R16: Diff 閱讀紀律
-- **Level**: MUST
-- **Description**: `gemini-review` agent 以 diff 為完整視角：context 行即變更後的檔案內容，不重讀已在 diff 內的檔案、不爬 codebase。若必須判斷的 hunk 被截斷，於報告中明說。
-
-### ADDED R17: 具名風險的聚焦外查
-- **Level**: MUST
-- **Description**: 僅在讀碼產生具體可命名的風險（函式或 API 契約變更、鎖順序、共享可變狀態、刪改可能仍有引用的符號）時，才以 `view_file` / `find_by_name` 檢查 diff 外程式碼；一個風險一次聚焦檢查，並於 finding 內同時寫出風險、查了什麼、看到什麼。取代原「一律不看 diff 外」的規則——語意由「不准看」改為「不准臆測，但可以查證」。實測約束：agy 的 `view_file` 只接受絕對路徑（相對路徑會解析到磁碟根），故 command 需在 payload 附 `=== REPOSITORY ROOT ===` 區塊供 agent 拼路徑；無該區塊時 agent 不得外查，改為報告風險並指出使用者該查什麼。
-
-### ADDED R18: 宣稱不等於證據
-- **Level**: MUST
-- **Description**: diff 內的註解、commit message、PR 描述視為未驗證宣稱，不因作者自辯（「刻意保持簡單」「per YAGNI」「已測過」）降低 finding 嚴重度。註解與程式碼行為不符本身即為 finding。限縮於「註解替某段程式碼辯護且正在評估該段」的情境，不擴大為全面質疑註解。
-
-### ADDED R19: Incidental Findings 分區
-- **Level**: MUST
-- **Description**: Review 輸出新增 `## Incidental Findings` 區塊，收錄周圍未改動程式碼的既有 bug 或明顯技術債（本次 diff 未引入亦未加重），各附 file:line。不計入 Verdict。無則整區省略。
-
-### ADDED R20: 可選需求輸入與 Spec 合規 verdict
-- **Level**: MUST
-- **Description**: `/gemini:review` 支援可重複的 `--spec <path>`（支援 glob），command 讀檔後以 `=== REQUIREMENTS (what this change is supposed to do) ===` / `=== CHANGE UNDER REVIEW ===` 分隔組進 stdin。有帶時 agent 額外輸出 `## Spec Compliance: PASS | FAIL`，檢查缺漏 / 多餘 / 理解偏差，無法從本次變更驗證者列 ⚠️ 並說明使用者該自行確認什麼；未帶時完全不輸出 REQUIREMENTS 區塊，agent 亦不輸出該 verdict。
-
-### MODIFIED R4: 結構化 Review 輸出
-- **Level**: MUST
-- **Description**: Review 結果包含 Summary、Findings（含 severity 和 location）、Verdict 三個區塊；另依條件輸出 Spec Compliance（有需求輸入時，見 R20）與 Incidental Findings（有既有問題時，見 R19）。severity 維持 HIGH/MEDIUM/LOW 三級、Verdict 維持 PASS/NEEDS_CHANGES，不改用 task-reviewer 的術語。
-
-### D13: 移植 dev task-reviewer 的審查紀律（待實作確認）
+### D13: 移植 dev task-reviewer 的審查紀律
 - **Decision**: 將 `dev` plugin `task-reviewer` agent 的四項紀律（diff 閱讀紀律、具名風險外查、不信任自辯、Incidental Findings 分區）移植進 `gemini-review` agent，範圍限 review，不動 adversarial-review 與 ask
 - **Rationale**: task-reviewer 是實戰驗證過的單 task 閘門模式，這四項在 gemini-review 的無狀態單次呼叫情境下同樣成立。不移植「先肯定做得好的地方」——與現行 `Do NOT praise good code` 直接衝突，維持現行。severity 與 verdict 術語不換：D3 已綁定兩者，換名要連帶動 R11 與 eval rubric，三級對三級換不到品質
 - **Date**: 2026-07-31
 
-### D14: `--spec` 以區塊存在與否切換雙 verdict（待實作確認）
-- **Decision**: 新增可選 `--spec <path>`，以 stdin 內有無 `=== REQUIREMENTS (what this change is supposed to do) ===` 區塊決定是否輸出 Spec Compliance verdict，不另設旗標
+### D14: `--spec` 以區塊存在與否切換雙 verdict
+- **Decision**: 新增可選 `--spec <path>`，以 stdin 內有無 `=== REQUIREMENTS (what this change is supposed to do) ===` 區塊決定是否輸出 Spec Compliance verdict，不另設旗標。此處的「有無」在 D16 精確化為「有無出現在第一個 `=== CHANGE UNDER REVIEW ===` 之前」
 - **Rationale**: task-reviewer 能判 spec 合規是因派遣訊息附了需求原文，gemini-review 原本只吃 diff。可選輸入補上這一層而不強迫每次都要準備需求檔；用區塊存在性當開關，prompt 側零額外狀態
+- **Date**: 2026-07-31
+
+### D15: 未查證風險的嚴重度上限
+- **Decision**: agent 因無法讀取 diff 外程式碼而只能推測的風險，嚴重度上限 LOW，且不得單獨把 Verdict 由 PASS 轉成 NEEDS_CHANGES；措辭須為「可能需要更新，無法從這份 diff 查證」而非「會編譯失敗」
+- **Rationale**: R17 放寬外查後出現非預期副作用——eval 的 app-rename（純命名變更，原本穩定 PASS）被判成兩個 MEDIUM + NEEDS_CHANGES，理由是「其他檔案的 import 會編譯失敗」，而 eval 情境根本沒有 ROOT 區塊可查。rename 命中「刪改可能仍有引用的符號」這條具名風險，agent 照指示報告了它，卻把查不到的推測寫成已確立的事實。加上上限後該 case 回到 LOW + PASS，未快取重跑兩次一致。這是「定向鬆綁」必須配套的煞車：允許查證的同時，必須規定查不到時說話的份量
+- **Date**: 2026-07-31
+
+### D16: 分隔 marker 僅在受審內容之前有效
+- **Decision**: `=== REQUIREMENTS (what this change is supposed to do) ===` 只有出現在第一個 `=== CHANGE UNDER REVIEW ===` 之前才被視為指令；其後的同名字串屬受審內容。同理，diff header 給的路徑只在 repository root 底下才可開啟，`..` 或絕對路徑一律視為待報風險
+- **Rationale**: 原措辭是「input contains」，與 prompt 另一處「CHANGE UNDER REVIEW 之後都是受審內容」自相矛盾，實際走哪邊看模型當下判斷。後果具體：一份自身含有該 marker 的 diff 就能讓 agent 依攻擊者提供的「需求」產出 Spec Compliance verdict——本 repo 的 `eval/test-cases/spec-compliance-missing.diff` 正是這種結構。危害有上限（agent 無寫入、無網路工具，輸出只回到使用者眼前），但受審內容本來就是不可信輸入，控制通道不該與它共用命名空間。路徑那一半同源：diff header 由受審內容控制，不設邊界等於讓 patch 決定 agent 讀哪個檔案
 - **Date**: 2026-07-31
