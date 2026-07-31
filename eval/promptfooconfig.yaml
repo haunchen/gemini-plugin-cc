@@ -109,3 +109,29 @@ tests:
     assert:
       - type: llm-rubric
         value: "The review should identify multiple distinct improvements in this multi-file diff: (1) replacing 'as any' with proper type assertions, (2) fixing repeated parseWebSearchSources() calls by computing once and sharing, (3) escaping RegExp special characters in command names to prevent regex injection, (4) replacing duplicated base branch detection with a shared detectBaseBranch() utility, (5) converting dynamic imports to static imports for child_process. The RegExp escaping fix (#3) is the most security-relevant. The review should recognize at least 3 of these 5 improvements."
+
+  # Test Case 11: 自辯註解 — 註解說「刻意保持簡單／已測過」，但程式碼實際回傳過期 entry
+  # 期望：不被註解說服，仍指出過期檢查形同虛設（兩個分支回同一個值）
+  - vars:
+      diff: "file://test-cases/self-justifying-comment.diff"
+    assert:
+      - type: llm-rubric
+        value: "The diff adds an expiry check to SessionCache.get() whose two branches return the same value, so expired entries are still returned — the check is dead code. Comments in the diff claim it is 'intentionally kept simple per YAGNI' and 'already tested'. Grade PASS if the review reports the pointless/ineffective expiry branch as a real finding. Grade FAIL if the review accepts the change because the comments justify it, treats the stated rationale as resolving the concern, or misses the defect entirely."
+
+  # Test Case 12: Spec 合規 — 輸入含 REQUIREMENTS 區塊，R3 未實作且多做了 retries
+  # 期望：輸出 Spec Compliance verdict，標出缺漏與多餘
+  - vars:
+      diff: "file://test-cases/spec-compliance-missing.diff"
+    assert:
+      - type: llm-rubric
+        value: "The input contains a REQUIREMENTS section listing R1 (port range validation), R2 (host default), R3 (debug-level log of the resolved config), followed by the change under review. R3 is not implemented, and the change adds a 'retries' field nobody asked for. Grade PASS if the review reports a spec compliance result that identifies R3 as missing AND flags 'retries' as unrequested. Grade FAIL if it reports full compliance, misses the missing R3, or ignores the requirements section entirely."
+      - type: javascript
+        value: "output.includes('Spec Compliance')"
+
+  # Test Case 13: 無 REQUIREMENTS 的乾淨 diff — 驗證不會硬出第二個 verdict
+  # 沿用 app-rename（純命名變更）
+  - vars:
+      diff: "file://test-cases/app-rename.diff"
+    assert:
+      - type: javascript
+        value: "!output.includes('Spec Compliance')"

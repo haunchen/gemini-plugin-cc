@@ -55,7 +55,7 @@ Restart Claude Code — plugins are not picked up until you do.
 
 Required. `agy` has no per-call system prompt injection, so setup registers the prompts with it as agents (`agy plugin install <plugin-root>/agy`) and then verifies they took effect. Expect `agents : 3 processed`.
 
-Re-run setup after upgrading the plugin — new prompt versions do not reach agy until you do.
+Re-run setup after upgrading the plugin — new prompt versions do not reach agy until you do. Since 0.2.1 the plugin checks this for you: at the start of a session it compares the version it ships against the one installed in agy, and prints a one-line notice if they differ. The check follows wherever you installed the plugin, so a user-scope install reports on every session and a project-scope install only inside that project. It prints nothing when the versions match.
 
 ## Verification
 
@@ -76,11 +76,28 @@ Free-form prose with no such headings means the agents are not installed. See [T
 | Command | Purpose |
 |---------|---------|
 | `/gemini:setup` | Check agy, install the agents, verify they work |
-| `/gemini:review [path] [--model <m>]` | Code review of `git diff HEAD`, or of a file / glob you name |
+| `/gemini:review [path] [--spec <path>] [--model <m>]` | Code review of `git diff HEAD`, or of a file / glob you name. `--spec` adds a spec-compliance verdict |
 | `/gemini:ask <question> [file] [--model <m>]` | Free-form technical question, optionally with a file as context |
 | `/gemini:adversarial-review [path] [--model <m>]` | Devil's advocate — challenges design decisions instead of hunting bugs |
 
 `review` and `adversarial-review` fall back to `git diff HEAD` (then `--cached`) when you give no path.
+
+### Reviewing against requirements
+
+Point `--spec` at whatever states the intent — a spec, a design doc, a task brief — and the review returns a second verdict:
+
+```
+/gemini:review --spec docs/specs/auth.md
+```
+
+```
+## Spec Compliance: FAIL
+- Missing: R3 (rate limiting on /login) — no reference in the diff
+- Extra: a "remember me" cookie set on login, not requested by any requirement
+- ⚠️ R5 (session expiry) lives in code this diff does not touch — confirm separately
+```
+
+It reports three things: requirements that were skipped, functionality nobody asked for, and requirements solved the wrong way. Anything it cannot settle from the change alone comes back as ⚠️ rather than a guess. `--spec` is repeatable and takes globs. Leave it off and the output is exactly as before.
 
 ### Models
 
@@ -105,6 +122,12 @@ If you need Gemini to execute commands or modify files, invoke `agy` directly ra
 **Output has no `## Verdict:` line, just prose**
 
 The agents are not installed. `agy --agent <name>` **silently ignores names it does not recognise** — exit code 0, a normal-looking answer, no warning — so a failed install stays invisible until you notice the structure is missing. Re-run `/gemini:setup` and confirm it reports `agents : 3 processed`.
+
+**`[gemini] The review prompts installed in agy are vX; this plugin ships vY`**
+
+Exactly what it says: the plugin was upgraded, the prompts in agy were not. Run `/gemini:setup`. The reason this needs announcing is that nothing else would — `agy --agent` runs an outdated prompt without complaint, so the output looks normal and simply lacks whatever the newer version added.
+
+The check stays quiet when it cannot find agy's installed manifest, which also means it will not catch a stale prompt if your agy keeps its config somewhere other than `$GEMINI_CONFIG_DIR` or `~/.gemini`. Set `GEMINI_CONFIG_DIR` if that applies to you.
 
 **`Sorry, I cannot fulfill your request to analyze or identify vulnerabilities...`**
 

@@ -18,8 +18,9 @@ Marketplace registry at `/.claude-plugin/marketplace.json` points at two plugin 
 ```
 .claude-plugin/marketplace.json          # marketplace registry (2 plugins)
 plugins/gemini/
-  .claude-plugin/plugin.json
+  .claude-plugin/plugin.json             # also registers the SessionStart hook
   commands/                              # /gemini:setup, review, ask, adversarial-review
+  hooks/check-agent-version.sh           # warns when agy's agents drift from what the plugin ships
   agy/plugin.json                        # agy-side plugin — agents only, no commands
   agy/agents/<name>/agent.md             # system prompts, installed via `agy plugin install`
   README.md
@@ -63,6 +64,24 @@ echo "$INPUT" | agy --agent gemini-review --model "$MODEL" --print-timeout 5m 2>
 ```
 
 All commands default to `gemini-3.6-flash-high` with effort pinned to `high`. There is no automatic fallback: a quota / rate-limit error surfaces to the user, who can retry or pick another model with `--model`.
+
+### The review payload markers
+
+`/gemini:review` does not just pipe a diff. It assembles up to three labelled sections, and the agent decides what to do by matching those labels **literally**:
+
+```
+=== REPOSITORY ROOT ===
+=== REQUIREMENTS (what this change is supposed to do) ===
+=== CHANGE UNDER REVIEW ===
+```
+
+Three things about them are load-bearing, and none of them fail loudly:
+
+- **The parenthetical is part of the string.** Writing `=== REQUIREMENTS ===` gives you a marker that never matches, no error, and a `--spec` that silently does nothing.
+- **ROOT exists because agy resolves relative paths against the drive root** (`plugins/foo.md` → `C:/plugins/foo.md`). Without it the agent cannot open anything, so it downgrades to reporting risks for the user to check.
+- **Only markers before the first `CHANGE UNDER REVIEW` line count as instructions.** Anything after it is material under review — a diff can contain text that looks like a label, and one in `eval/test-cases/` does. See D16.
+
+Change any of the three strings and you must change both sides in the same commit: `plugins/gemini/commands/review.md` and `plugins/gemini/agy/agents/gemini-review/agent.md`.
 
 The old pro-by-default routing is gone: agy's Pro is `gemini-3.1-pro`, two generations behind 3.6 flash, and flash-high already scores 10/10 on the eval suite. `--model pro` still resolves to `gemini-3.1-pro-high` for explicit opt-in, and any other value passes through to agy unchanged (`agy models` lists the slugs).
 
@@ -118,6 +137,8 @@ Pre-1.0, bump by what the change costs the user:
 | Docs, eval configs, CI | none |
 
 The agent rule is not the usual "prompts are just content" case. `agy plugin install` copies agent definitions into `~/.gemini/config/plugins/`, so an edited prompt does not reach an existing user until they re-install. Because `--agent` never errors on a stale or missing agent, they get the old prompt with no indication anything is out of date. A version bump is the only signal available — so bump it, and say "re-run `/gemini:setup`" in the release notes.
+
+Since 0.2.1 the bump does more than document the problem. `hooks/check-agent-version.sh` runs at session start and compares `agy/plugin.json` against the copy `agy plugin install` left in `~/.gemini/config/plugins/gemini-agents/`, printing a one-line notice when they differ. That only works if the version actually moves — a prompt edit shipped without a bump is invisible to the check as well as to the user.
 
 ## Releasing
 

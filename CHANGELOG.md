@@ -4,6 +4,41 @@ All notable changes to this project are documented here.
 
 Both plugins are versioned independently, but have moved together so far, so releases are tagged once for the repo (`v<version>`). See [CLAUDE.md](CLAUDE.md#versioning) for the bump rules.
 
+## [0.2.1] — 2026-07-31
+
+`/gemini:review` picks up four review disciplines ported from this repo's `dev` plugin `task-reviewer` agent, plus an optional way to hand it the requirements. The plugin also stops relying on you to remember that prompts need reinstalling.
+
+### Upgrading
+
+**Re-run `/gemini:setup`.** The prompt lives in agy, not in the plugin — upgrading the plugin alone leaves you on the old one, and `--agent` will not tell you. From this release on, the plugin notices for you and says so at the start of a session.
+
+### Added
+
+- **A session-start check for stale prompts.** Every release so far has ended with "remember to re-run `/gemini:setup`", which is a documentation fix for a mechanical problem: the agents live in `~/.gemini/`, a plugin upgrade does not touch them, and `agy --agent` answers happily with whatever it already has. The plugin now compares the version it ships against the one installed in agy at session start, and prints a one-line notice when they diverge. It stays silent when they match, and silent when it cannot find the installed manifest at all — a check that guesses wrong on every session would just train you to ignore it.
+- **`--spec <path>`.** Point `/gemini:review` at a spec, design doc, or task brief and it returns a second verdict — `## Spec Compliance: PASS | FAIL` — checking the change for missing requirements, unrequested extras, and misread intent. Requirements that cannot be settled from the change alone come back as ⚠️ with a note on what to confirm yourself. Repeatable, glob-aware. Without it nothing changes: no requirements section in the input, no second verdict.
+- **`## Incidental Findings`.** Existing bugs and technical debt in surrounding code that the change neither introduced nor made worse now get their own section instead of being dropped or misfiled as defects of the change. They never affect either verdict.
+
+### Changed
+
+- **The reviewer may now verify a nameable risk outside the diff.** The old rule was a flat "do not speculate about unseen code", which read as "do not look". It can now follow one focused lookup per specific, nameable risk — a changed signature or API contract, changed lock ordering or shared mutable state, a symbol that may still be referenced — and must report what it checked and what it found. "I would like to look around" still does not qualify.
+- **A risk it could not verify is capped at LOW** and never on its own turns a `PASS` into `NEEDS_CHANGES`. Without that cap the reviewer wrote unchecked guesses as established facts — an early build called a pure rename a compile break. It now says what it could not check, and says so as a pointer rather than a defect.
+- **Comments no longer count as evidence.** "Intentionally kept simple", "per YAGNI", "already tested" are treated as unverified claims; a stated rationale cannot lower a finding's severity, and a comment contradicting its code is itself a finding.
+- **Diff reading is explicit.** Context lines are the post-change file, so files already shown are not re-read; a truncated hunk is reported rather than guessed at.
+
+Severity levels (`HIGH`/`MEDIUM`/`LOW`) and the main verdict (`PASS`/`NEEDS_CHANGES`) are unchanged. `adversarial-review` and `ask` are untouched.
+
+### Verified
+
+| | |
+|---|---|
+| review eval, custom agent | 11/13 |
+| review eval, bare model | 8/13 |
+| new cases: self-justifying comment, spec compliance, verdict suppression | all pass on the custom agent |
+
+Treat those two numbers as coarse. agy exposes no sampling controls, and across runs of this same suite the untouched bare-model arm moved by three points on its own — enough that a one- or two-point gap means nothing. What the runs do establish: the three new behaviours fire, and an early version of this prompt escalated a pure rename to `NEEDS_CHANGES`, which the LOW cap on unverifiable risks fixed.
+
+The two that slipped were `attribute-shadowing` and `incidental-findings`, both previously passing. Rerunning them uncached told different stories: `incidental-findings` swung from naming one improvement to naming all five, which is the sampling noise described above. `attribute-shadowing` reproduced its shape both times — a one-line summary, empty findings, an immediate `PASS` — which is what the prompt asks for on a clean fix, while that case's rubric wants the crash mechanism spelled out. Worth watching rather than resolved.
+
 ## [0.2.0] — 2026-07-31
 
 Migrated both plugins from Gemini CLI to the Antigravity CLI (`agy`). Gemini CLI stopped serving consumer tiers on June 18, 2026 and now returns `IneligibleTierError`.
@@ -49,5 +84,6 @@ Initial open-source release.
 - **`gemini-images`** — `PreToolUse` hook on `Read` that resizes an image, describes it through Gemini, runs tesseract OCR in parallel, and hands Claude the text so the prompt cache survives.
 - promptfoo eval suite with LLM-as-judge rubrics over real-world diffs.
 
+[0.2.1]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haunchen/gemini-plugin-cc/releases/tag/v0.1.0

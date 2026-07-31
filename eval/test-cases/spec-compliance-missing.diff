@@ -1,0 +1,31 @@
+=== REQUIREMENTS (what this change is supposed to do) ===
+R1: parseConfig() must reject a config whose `port` is outside 1-65535 and throw ConfigError.
+R2: parseConfig() must default `host` to "127.0.0.1" when the field is absent.
+R3: parseConfig() must log the resolved config at debug level before returning.
+=== CHANGE UNDER REVIEW ===
+diff --git a/src/config.ts b/src/config.ts
+index 8c2d4e1..b91a7f3 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -1,10 +1,24 @@
+ import { ConfigError } from "./errors";
++import { logger } from "./logger";
+
+ export function parseConfig(raw: Record<string, unknown>): Config {
+-  return {
+-    port: raw.port as number,
+-    host: raw.host as string,
+-  };
++  const port = raw.port as number;
++  if (port < 1 || port > 65535) {
++    throw new ConfigError(`port out of range: ${port}`);
++  }
++
++  const config = {
++    port,
++    host: (raw.host as string) ?? "127.0.0.1",
++    retries: (raw.retries as number) ?? 3,
++  };
++
++  return config;
+ }
