@@ -97,6 +97,28 @@ agy exposes no sampling controls, so eval runs vary more than the pre-0.2.0 numb
 
 Judge note: the rubric provider must be a current model. `claude-sonnet-4-20250514` is retired (404) and promptfoo ≤ 0.121.5 sends a deprecated `temperature` to newer models (400) — either failure grades every case FAIL regardless of output quality. Use promptfoo `@latest`.
 
+## Versioning
+
+The two plugins version independently — bump only the one you changed. They happen to both sit at 0.2.0 because the agy migration touched both.
+
+A version lives in **three** files per plugin, and they must move together:
+
+```
+.claude-plugin/marketplace.json          # the plugin's entry in the plugins[] array
+plugins/<plugin>/.claude-plugin/plugin.json
+plugins/<plugin>/agy/plugin.json         # follows its parent plugin's version
+```
+
+Pre-1.0, bump by what the change costs the user:
+
+| Change | Bump |
+|--------|------|
+| A command is added or removed, an env var is renamed, a newer agy is required, or the install flow changes | MINOR |
+| **Any edit to `agy/agents/*/agent.md`**, a bug fix, or a change to a command's internals | PATCH |
+| Docs, eval configs, CI | none |
+
+The agent rule is not the usual "prompts are just content" case. `agy plugin install` copies agent definitions into `~/.gemini/config/plugins/`, so an edited prompt does not reach an existing user until they re-install. Because `--agent` never errors on a stale or missing agent, they get the old prompt with no indication anything is out of date. A version bump is the only signal available — so bump it, and say "re-run `/gemini:setup`" in the release notes.
+
 ## Design Constraints
 
 - Zero-code core: no JS runtime for `gemini` plugin (only Markdown + bash). `gemini-images` uses a Node.js hook but stays self-contained.
