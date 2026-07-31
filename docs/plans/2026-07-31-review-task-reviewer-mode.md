@@ -499,7 +499,7 @@ Run:
 ```bash
 { printf '=== REPOSITORY ROOT ===\n%s\n' "$(git rev-parse --show-toplevel)"; \
   printf '=== REQUIREMENTS (what this change is supposed to do) ===\n'; \
-  sed -n '/^### R16/,/^### D13/p' docs/specs/gemini-review.md; \
+  sed -n '/^### ADDED R16/,/^### D13/p' docs/specs/gemini-review.md; \
   printf '\n=== CHANGE UNDER REVIEW ===\n'; \
   cat eval/test-cases/app-rename.diff; } \
 | agy --agent gemini-review --model gemini-3.6-flash-high --print-timeout 5m 2>&1 | head -50
