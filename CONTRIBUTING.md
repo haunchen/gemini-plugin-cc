@@ -20,8 +20,15 @@ See [CLAUDE.md](CLAUDE.md) for the architecture overview. The short version:
    claude plugin install gemini --scope project
    # restart Claude Code session
    ```
-3. Iterate on commands or system prompts. Commands are pure Markdown — no build step.
-4. For `gemini-images`, run `bash plugins/gemini-images/scripts/doctor.sh` to verify dependencies (jq, tesseract, optionally imagemagick).
+3. Install the agents into agy — the plugins cannot apply their system prompts without this:
+   ```bash
+   agy plugin install "$(pwd)/plugins/gemini/agy"           # expect: agents : 3 processed
+   agy plugin install "$(pwd)/plugins/gemini-images/agy"    # expect: agents : 1 processed
+   ```
+4. Iterate. Commands are pure Markdown and take effect on the next run — no build step.
+
+   **Agent definitions do not.** `agy plugin install` *copies* them into `~/.gemini/config/plugins/`, so after editing any `agy/agents/*/agent.md` you must re-run the install for that plugin. Skip it and you will keep testing the previous prompt while reading the new one — and since `--agent` never errors, nothing will tell you.
+5. For `gemini-images`, run `bash plugins/gemini-images/scripts/doctor.sh` to verify dependencies (jq, tesseract, optionally imagemagick) and that the agent is installed.
 
 ## Running the eval suite
 
@@ -49,6 +56,8 @@ Each config runs two providers — bare model vs custom agent — through the sh
 Use promptfoo `@latest`. Older releases send a deprecated `temperature` to current judge models, which fails every grading call with a 400 and reports 0% pass regardless of output quality. A retired judge model gives the same misleading result via 404 — if every case fails, check `gradingResult` before blaming the model under test.
 
 Eval runs hit live agy quota — be signed in via `agy` OAuth.
+
+Expect more run-to-run variance than the pre-0.2.0 numbers. Gemini CLI was pinned to `temperature: 0` through `.gemini/settings.json`; agy exposes no sampling controls at all, so that file was removed and there is nothing to replace it with. Treat a one-case difference between runs as noise, not a regression.
 
 When changing an agent's system prompt, run the relevant eval before and after. A useful guard rail: the custom prompt should not regress on cases the bare model already passes.
 

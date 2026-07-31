@@ -49,12 +49,26 @@ Linux is not supported.
 
 ## Installation
 
+**1. Install the plugin in Claude Code**
+
 ```
 /plugin marketplace add https://github.com/haunchen/gemini-plugin-cc
 /plugin install gemini-images
 ```
 
-Restart Claude Code after installation.
+Restart Claude Code — plugins are not picked up until you do.
+
+**2. Install the agent into agy**
+
+Required. `agy` cannot take a system prompt per call, so the image-describe prompt has to be registered with it up front. From a clone of this repo:
+
+```bash
+agy plugin install "$(pwd)/plugins/gemini-images/agy"
+```
+
+Expect `agents : 1 processed`. Re-running upgrades in place.
+
+Without this step the hook still returns a description, but a generic one — `--agent` silently ignores names it does not recognise, so nothing reports an error. Descriptions will be markdown-formatted, English or Simplified Chinese, and padded with filler instead of the compact single paragraph the prompt specifies.
 
 ## Verification
 
@@ -64,7 +78,7 @@ Run the diagnostic from the repository root:
 bash plugins/gemini-images/scripts/doctor.sh
 ```
 
-Required checks must all pass. Optional warnings are fine for basic use but reduce quality.
+Required checks must all pass — including `agent installed: gemini-image-describe`, which is the check for step 2 above. Optional warnings are fine for basic use but reduce quality.
 
 ## Configuration
 
@@ -99,6 +113,12 @@ Install ImageMagick to enable resize. Without resize, Gemini receives the origin
 
 ```
 /plugin uninstall gemini-images
+```
+
+The agent lives in agy, not in Claude Code, so remove it separately or it stays behind:
+
+```bash
+agy plugin uninstall gemini-images-agents
 ```
 
 ## Limitations

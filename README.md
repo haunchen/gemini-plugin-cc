@@ -13,7 +13,12 @@
 >
 > Gemini CLI stopped serving consumer tiers on June 18, 2026 ([official notice](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals)) and now returns `IneligibleTierError`. Both plugins call `agy` instead, which requires **agy 1.1.6 or newer** for custom agent support.
 >
-> One behaviour change: `agy` cannot take a system prompt per call, so `/gemini:setup` now installs the prompts into agy as agents. Run it once after upgrading. Everything else — the `/gemini:*` commands, their output, the read-only restriction — works the same. Review quality is unchanged (10/10 on the eval suite, same as Gemini CLI scored).
+> Two things changed for users:
+>
+> 1. **`/gemini:setup` is now required.** `agy` cannot take a system prompt per call, so setup installs the prompts into agy as agents. Skip it and the commands still run, but with no system prompt applied.
+> 2. **`/gemini:security-review` was removed** — agy declines security-audit requests. See [Commands](#commands-gemini-plugin).
+>
+> `/gemini:review`, `/gemini:ask` and `/gemini:adversarial-review` work as before, with the same output and the same read-only restriction. Review quality is unchanged: 10/10 on the eval suite, the same score Gemini CLI got.
 
 A marketplace of [Claude Code plugins](https://docs.anthropic.com/en/docs/claude-code/plugins) that bring Gemini into Claude Code via the [Antigravity CLI](https://antigravity.google) — get a second opinion on code, and keep your prompt cache warm while reading images.
 
@@ -28,13 +33,23 @@ Both plugins share the same agy OAuth credentials. Install one or both.
 
 ## Prerequisites
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) installed
-- [Antigravity CLI](https://antigravity.google) **1.1.6 or newer** (`agy --version`; older builds cannot load the custom agents these plugins install)
-- Signed in — run `agy` once interactively to authenticate via Google OAuth
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview)
+- [Antigravity CLI](https://antigravity.google) **1.1.6 or newer** — older builds cannot load the custom agents these plugins install
 
-Plugin-specific extra dependencies are listed in each plugin's README.
+`gemini-images` needs a few more tools (`jq`, Node.js, optionally tesseract and ImageMagick); see [its README](plugins/gemini-images/README.md#prerequisites).
 
-## Installation
+## Setup
+
+### 1. Install and sign in to agy
+
+Install from [antigravity.google](https://antigravity.google), then check the version and authenticate:
+
+```bash
+agy --version          # must be >= 1.1.6
+agy                    # run once interactively to sign in via Google OAuth, then quit
+```
+
+### 2. Install the plugins in Claude Code
 
 ```
 /plugin marketplace add https://github.com/haunchen/gemini-plugin-cc
@@ -42,16 +57,60 @@ Plugin-specific extra dependencies are listed in each plugin's README.
 /plugin install gemini-images
 ```
 
-Restart Claude Code after installation.
+Restart Claude Code — plugins are not picked up until you do.
 
-For `gemini`, run `/gemini:setup` — this is **required**, not just a check: it installs the three system prompts into agy as agents. Without it the commands still run but produce generic, unstructured output.
+### 3. Install the agents into agy
 
-For `gemini-images`, install its agent and verify:
+This step is **required**, not a health check. `agy` cannot take a system prompt per call, so the prompts have to be registered with it up front. Without this the commands still run, but you get a generic answer with none of this repo's review structure.
+
+For the `gemini` plugin, run the slash command — it installs the agents and verifies they took effect:
 
 ```
-agy plugin install <repo>/plugins/gemini-images/agy
+/gemini:setup
+```
+
+For `gemini-images`, install its agent from a clone of this repo:
+
+```bash
+git clone https://github.com/haunchen/gemini-plugin-cc
+agy plugin install "$(pwd)/gemini-plugin-cc/plugins/gemini-images/agy"
+```
+
+Expect `agents : 1 processed`. Re-running either install upgrades in place.
+
+### 4. Verify
+
+```
+/gemini:review
+```
+
+on a repo with uncommitted changes. A working install returns `## Review Summary` / `## Findings` / `## Verdict:`. Free-form prose with no such headings means the agent is not installed — see [Troubleshooting](#troubleshooting).
+
+For `gemini-images`:
+
+```bash
 bash plugins/gemini-images/scripts/doctor.sh
 ```
+
+All Required checks must pass. Optional warnings are fine for basic use but reduce quality.
+
+## Troubleshooting
+
+**Reviews come back as unstructured prose**
+
+The agent is not installed. `agy --agent <name>` **silently ignores names it does not recognise** — it returns a normal-looking answer with exit code 0 and no warning, so a failed install is invisible until you notice the output has no `## Verdict:` line. Re-run `/gemini:setup` and check that step 4 reports `agents : 3 processed`.
+
+**`Sorry, I cannot fulfill your request...`**
+
+agy declines requests it reads as security auditing. This is why `/gemini:security-review` was removed. `/gemini:review` is not affected and still reports security defects.
+
+**`IneligibleTierError`**
+
+You are still on the old `gemini` CLI path. Gemini CLI stopped serving consumer tiers on June 18, 2026; upgrade to v0.2.0 of these plugins, which call `agy` instead.
+
+**Auth errors, or the run hangs**
+
+Run `agy` interactively once to refresh the OAuth token — `-p` (print) mode does not always refresh a stale one.
 
 ## Commands (gemini plugin)
 
@@ -67,6 +126,20 @@ bash plugins/gemini-images/scripts/doctor.sh
 Each agent carries a `tools` whitelist in its frontmatter — only `view_file` and `find_by_name`. Writing files, running shell commands, web access and MCP tools are not in the agent's toolset at all, so there is nothing to bypass: the restriction holds even under `--dangerously-skip-permissions`. `/gemini:setup` verifies this on every run.
 
 This keeps the review / ask / adversarial-review commands focused on inspection. If you need Gemini to execute shell commands or modify files, invoke `agy` directly instead of going through this plugin.
+
+## Uninstall
+
+```
+/plugin uninstall gemini
+/plugin uninstall gemini-images
+```
+
+The agents live in agy, not in Claude Code, so remove them separately or they stay behind:
+
+```bash
+agy plugin uninstall gemini-agents
+agy plugin uninstall gemini-images-agents
+```
 
 ## Project Structure
 

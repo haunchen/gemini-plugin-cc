@@ -78,13 +78,20 @@ The old pro-by-default routing is gone: agy's Pro is `gemini-3.1-pro`, two gener
    - Restart Claude Code session (plugins require restart)
    - Alternative for one-off testing: `claude --plugin-dir .`
 2. `/gemini:setup` — verify agy, version (≥ 1.1.6), OAuth, install the agents, and confirm they took effect
-3. `/gemini:review` — review current git diff
-4. `/gemini:review path/to/file` — review specific file
-5. `bash plugins/gemini-images/scripts/doctor.sh` — verify gemini-images dependencies
+3. `agy plugin install "$(pwd)/plugins/gemini-images/agy"` — gemini-images has no setup command of its own
+4. `/gemini:review` — review current git diff
+5. `/gemini:review path/to/file` — review specific file
+6. `bash plugins/gemini-images/scripts/doctor.sh` — verify gemini-images dependencies and agent install
+
+**After editing any `agy/agents/*/agent.md`, re-run `agy plugin install` for that plugin.** Install copies the agents into `~/.gemini/config/plugins/`; without a re-install you keep exercising the old prompt, and `--agent` will not tell you.
 
 ### Eval suite
 
-`eval/` ships promptfoo configs comparing the custom agent against the bare model. Run via `eval/run-agy*.sh` scripts. See `CONTRIBUTING.md` for the workflow.
+`eval/` ships promptfoo configs comparing the custom agent against the bare model, both arms going through one runner: `run-agy.sh <agent|-> <model-slug>`, where `-` means no agent. Invoke the configs with `npx promptfoo@latest eval -c <config>`, not the runner directly. See `CONTRIBUTING.md` for the workflow.
+
+The two `promptfooconfig-security*.yaml` configs are PARKED — the command they target was removed (see D12). Their test cases and rubrics are kept for whenever it comes back.
+
+agy exposes no sampling controls, so eval runs vary more than the pre-0.2.0 numbers, which were pinned to `temperature: 0` via a `.gemini/settings.json` that no longer applies.
 
 Judge note: the rubric provider must be a current model. `claude-sonnet-4-20250514` is retired (404) and promptfoo ≤ 0.121.5 sends a deprecated `temperature` to newer models (400) — either failure grades every case FAIL regardless of output quality. Use promptfoo `@latest`.
 
