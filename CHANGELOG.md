@@ -4,16 +4,17 @@ All notable changes to this project are documented here.
 
 Both plugins are versioned independently, but have moved together so far, so releases are tagged once for the repo (`v<version>`). See [CLAUDE.md](CLAUDE.md#versioning) for the bump rules.
 
-## [0.2.1] — 2026-07-31
+## [0.3.0] — 2026-07-31
 
-`/gemini:review` picks up four review disciplines ported from this repo's `dev` plugin `task-reviewer` agent, plus an optional way to hand it the requirements.
+`/gemini:review` picks up four review disciplines ported from this repo's `dev` plugin `task-reviewer` agent, plus an optional way to hand it the requirements. The plugin also stops relying on you to remember that prompts need reinstalling.
 
 ### Upgrading
 
-**Re-run `/gemini:setup`.** The prompt lives in agy, not in the plugin — upgrading the plugin alone leaves you on the old one, and `--agent` will not tell you.
+**Re-run `/gemini:setup`.** The prompt lives in agy, not in the plugin — upgrading the plugin alone leaves you on the old one, and `--agent` will not tell you. From this release on, the plugin notices for you and says so at the start of a session.
 
 ### Added
 
+- **A session-start check for stale prompts.** Every release so far has ended with "remember to re-run `/gemini:setup`", which is a documentation fix for a mechanical problem: the agents live in `~/.gemini/`, a plugin upgrade does not touch them, and `agy --agent` answers happily with whatever it already has. The plugin now compares the version it ships against the one installed in agy at session start, and prints a one-line notice when they diverge. It stays silent when they match, and silent when it cannot find the installed manifest at all — a check that guesses wrong on every session would just train you to ignore it.
 - **`--spec <path>`.** Point `/gemini:review` at a spec, design doc, or task brief and it returns a second verdict — `## Spec Compliance: PASS | FAIL` — checking the change for missing requirements, unrequested extras, and misread intent. Requirements that cannot be settled from the change alone come back as ⚠️ with a note on what to confirm yourself. Repeatable, glob-aware. Without it nothing changes: no requirements section in the input, no second verdict.
 - **`## Incidental Findings`.** Existing bugs and technical debt in surrounding code that the change neither introduced nor made worse now get their own section instead of being dropped or misfiled as defects of the change. They never affect either verdict.
 
@@ -83,6 +84,6 @@ Initial open-source release.
 - **`gemini-images`** — `PreToolUse` hook on `Read` that resizes an image, describes it through Gemini, runs tesseract OCR in parallel, and hands Claude the text so the prompt cache survives.
 - promptfoo eval suite with LLM-as-judge rubrics over real-world diffs.
 
-[0.2.1]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.2.0...v0.2.1
+[0.3.0]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haunchen/gemini-plugin-cc/releases/tag/v0.1.0

@@ -1,11 +1,26 @@
 {
   "name": "gemini",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Gemini via Antigravity CLI for Claude Code — ask, review, adversarial-review",
   "author": {
     "name": "Frank Chen"
   },
   "repository": "https://github.com/haunchen/gemini-plugin-cc",
   "license": "MIT",
-  "keywords": ["gemini", "code-review", "second-opinion"]
+  "keywords": ["gemini", "code-review", "second-opinion"],
+  "hooks": {
+    "SessionStart": [{
+      "matcher": "startup",
+      "hooks": [{
+        "type": "command",
+        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/check-agent-version.sh"
+      }]
+    }, {
+      "matcher": "resume",
+      "hooks": [{
+        "type": "command",
+        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/check-agent-version.sh"
+      }]
+    }]
+  }
 }

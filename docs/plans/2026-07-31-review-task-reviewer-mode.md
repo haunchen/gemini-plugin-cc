@@ -22,7 +22,7 @@ Design: `docs/plans/2026-07-31-review-task-reviewer-mode-design.md`
 - Gemini 的輸出必須逐字呈現給使用者，不重排、不摘要。
 - 改動任何 `agy/agents/*/agent.md` 後必須重跑 `agy plugin install`，否則跑的還是舊 prompt，而 `--agent` 不會報錯。
 - 版本號存在三個檔案，必須一起動：`.claude-plugin/marketplace.json` 的 plugins[] 條目、`plugins/gemini/.claude-plugin/plugin.json`、`plugins/gemini/agy/plugin.json`。
-- 本次改動屬 PATCH（編輯 agent prompt）：0.2.0 → 0.2.1。
+- 本次改動屬 PATCH（編輯 agent prompt）：0.2.0 → 0.2.1。（實際落點是 0.3.0：收尾後追加了 SessionStart 版本漂移偵測 hook，屬 MINOR。本文以下所有 0.2.1 字樣為當時規劃的記錄，未回頭改寫。）
 - 本 repo 沒有單元測試框架。驗證手段只有 promptfoo eval 與手動 agy 呼叫，Task 內的「跑測試」一律指這兩者。
 - 工作目錄一律為 repo 根 `D:/UserData/Documents/Code/gemini-plugin-cc`。bash 指令用 Bash tool 執行。
 

@@ -18,8 +18,9 @@ Marketplace registry at `/.claude-plugin/marketplace.json` points at two plugin 
 ```
 .claude-plugin/marketplace.json          # marketplace registry (2 plugins)
 plugins/gemini/
-  .claude-plugin/plugin.json
+  .claude-plugin/plugin.json             # also registers the SessionStart hook
   commands/                              # /gemini:setup, review, ask, adversarial-review
+  hooks/check-agent-version.sh           # warns when agy's agents drift from what the plugin ships
   agy/plugin.json                        # agy-side plugin — agents only, no commands
   agy/agents/<name>/agent.md             # system prompts, installed via `agy plugin install`
   README.md
@@ -136,6 +137,8 @@ Pre-1.0, bump by what the change costs the user:
 | Docs, eval configs, CI | none |
 
 The agent rule is not the usual "prompts are just content" case. `agy plugin install` copies agent definitions into `~/.gemini/config/plugins/`, so an edited prompt does not reach an existing user until they re-install. Because `--agent` never errors on a stale or missing agent, they get the old prompt with no indication anything is out of date. A version bump is the only signal available — so bump it, and say "re-run `/gemini:setup`" in the release notes.
+
+Since 0.3.0 the bump does more than document the problem. `hooks/check-agent-version.sh` runs at session start and compares `agy/plugin.json` against the copy `agy plugin install` left in `~/.gemini/config/plugins/gemini-agents/`, printing a one-line notice when they differ. That only works if the version actually moves — a prompt edit shipped without a bump is invisible to the check as well as to the user.
 
 ## Releasing
 

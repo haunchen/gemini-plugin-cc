@@ -1,5 +1,5 @@
 {
   "name": "gemini-agents",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "System prompt agents for the gemini Claude Code plugin (read-only)"
 }

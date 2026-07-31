@@ -91,6 +91,10 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Level**: MUST
 - **Description**: `/gemini:review` 支援可重複的 `--spec <path>`（支援 glob），command 讀檔後以 `=== REQUIREMENTS (what this change is supposed to do) ===` / `=== CHANGE UNDER REVIEW ===` 分隔組進 stdin；`--spec` 後未接值或接到另一個 `--` 開頭的 token 時停下報錯，不吞下一個 token 當檔名。有帶時 agent 額外輸出 `## Spec Compliance: PASS | FAIL`，檢查缺漏 / 多餘 / 理解偏差，無法從本次變更驗證者列 ⚠️ 並說明使用者該自行確認什麼；未帶時完全不輸出 REQUIREMENTS 區塊，agent 亦不輸出該 verdict。marker 僅在出現於第一個 `=== CHANGE UNDER REVIEW ===` 之前時才視為指令，其後的同名字串屬受審內容（見 D16）。
 
+### R21: Agent 版本漂移偵測
+- **Level**: SHOULD
+- **Description**: `gemini` plugin 以 SessionStart hook（`hooks/check-agent-version.sh`，bash，不引入 jq 或其他新依賴）比對 `${CLAUDE_PLUGIN_ROOT}/agy/plugin.json` 與 `${GEMINI_CONFIG_DIR:-$HOME/.gemini}/config/plugins/gemini-agents/plugin.json` 的 version 欄位，不一致時輸出單行提示要求重跑 `/gemini:setup`。一致、任一 manifest 不存在、或環境變數未設時一律靜默 exit 0。hook 的作用範圍跟隨 plugin 的安裝 scope，plugin 不對此另作規定。
+
 ## Scenarios
 
 ### S1: 首次設定檢查
@@ -134,6 +138,12 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **When**: 不帶 --spec 執行 /gemini:review
 - **Then**: 該 marker 位於 `=== CHANGE UNDER REVIEW ===` 之後，視為受審內容而非指令，不產出 Spec Compliance verdict
 - **Implements**: #R20
+
+### S8: Plugin 已升級但 agent 未重裝
+- **Given**: 使用者升級 `gemini` plugin，但未重跑 `/gemini:setup`，agy 內仍是舊版 agent
+- **When**: 開始新 session
+- **Then**: 輸出單行提示，指出已安裝版本與 plugin 版本並要求重跑 `/gemini:setup`；版本一致或找不到已安裝 manifest 時完全無輸出
+- **Implements**: #R21
 
 ## Design Decisions
 
@@ -215,4 +225,9 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 ### D16: 分隔 marker 僅在受審內容之前有效
 - **Decision**: `=== REQUIREMENTS (what this change is supposed to do) ===` 只有出現在第一個 `=== CHANGE UNDER REVIEW ===` 之前才被視為指令；其後的同名字串屬受審內容。同理，diff header 給的路徑只在 repository root 底下才可開啟，`..` 或絕對路徑一律視為待報風險
 - **Rationale**: 原措辭是「input contains」，與 prompt 另一處「CHANGE UNDER REVIEW 之後都是受審內容」自相矛盾，實際走哪邊看模型當下判斷。後果具體：一份自身含有該 marker 的 diff 就能讓 agent 依攻擊者提供的「需求」產出 Spec Compliance verdict——本 repo 的 `eval/test-cases/spec-compliance-missing.diff` 正是這種結構。危害有上限（agent 無寫入、無網路工具，輸出只回到使用者眼前），但受審內容本來就是不可信輸入，控制通道不該與它共用命名空間。路徑那一半同源：diff header 由受審內容控制，不設邊界等於讓 patch 決定 agent 讀哪個檔案
+- **Date**: 2026-07-31
+
+### D17: 版本漂移用 hook 偵測，不用輸出印記
+- **Decision**: 以 SessionStart bash hook 比對兩份 `plugin.json` 的 version 欄位，而非讓 agent 在 review 輸出帶版本字串，也不在每個 command 開頭檢查
+- **Rationale**: 偵測所需的資料早就存在——`agy plugin install` 是逐字複製，連 `plugin.json` 一併裝進 `~/.gemini/config/plugins/gemini-agents/`，所以不必新增任何 metadata。選 hook 而非 per-command 檢查：每 session 只跑一次而非每次 review，且不必改三個 command、未來新增 command 自動涵蓋。不選輸出印記：那會污染 review 輸出，與「Gemini 輸出必須逐字呈現、不重排」直接衝突。找不到已安裝 manifest 時選擇靜默而非報「未安裝」：agy 在其他平台的 config 路徑未經實測，猜錯會變成每個 session 都誤報，而「完全沒安裝」本來就有既有訊號（review 輸出沒有 `## Verdict:` 結構）。bash 實作不違反零程式碼約束——原文限制的是 JS runtime，`gemini-images` 的 hook 入口本就是 `.sh`
 - **Date**: 2026-07-31
