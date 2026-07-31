@@ -8,7 +8,7 @@
   </text>
   <rect x="80" y="170" width="96" height="4" rx="2" fill="#fb923c"/>
   <text x="80" y="218" font-family="'Inter', 'Noto Sans TC', system-ui, sans-serif" font-size="24" fill="#94A3B8">
-    Claude Code plugin — second opinion from Gemini CLI
+    Claude Code plugin — second opinion from Gemini
   </text>
 
   <!-- 右上角 plugin 標籤 -->
@@ -39,16 +39,16 @@
     spawn
   </text>
 
-  <!-- 節點 2：Gemini CLI（強調節點，brand-blue border） -->
+  <!-- 節點 2：Antigravity CLI（強調節點，brand-blue border） -->
   <rect x="506" y="310" width="268" height="140" rx="4" fill="#152030" stroke="#0084ff" stroke-width="2"/>
   <text x="640" y="355" text-anchor="middle" font-family="'Inter', 'Noto Sans TC', system-ui, sans-serif" font-size="22" font-weight="700" fill="#E2E8F0">
-    Gemini CLI
+    Antigravity CLI
   </text>
   <text x="640" y="385" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="13" fill="#94A3B8">
-    gemini -p
+    agy -p
   </text>
   <text x="640" y="405" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="13" fill="#94A3B8">
-    --admin-policy
+    --agent
   </text>
   <text x="640" y="430" text-anchor="middle" font-family="'Inter', system-ui, sans-serif" font-size="13" fill="#64748B">
     pro &#8594; flash fallback
@@ -85,7 +85,7 @@
     </text>
     <text x="80" y="568">
       <tspan fill="#64748B">auth:</tspan> Google OAuth
-      <tspan fill="#64748B" dx="24">policy:</tspan> read_file · glob (admin-policy lockdown)
+      <tspan fill="#64748B" dx="24">tools:</tspan> view_file · find_by_name (agent whitelist)
     </text>
   </g>
 

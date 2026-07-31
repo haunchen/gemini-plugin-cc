@@ -7,7 +7,7 @@ last_modified: 2026-04-18
 
 # Gemini Images
 
-Claude Code plugin，在 Read 工具讀取圖片檔前攔截，透過 Gemini CLI 轉為文字描述後回傳，避免圖片內容導致 prompt cache 失效。
+Claude Code plugin，在 Read 工具讀取圖片檔前攔截，透過 Antigravity CLI（`agy`）驅動 Gemini 轉為文字描述後回傳，避免圖片內容導致 prompt cache 失效。
 
 ## Requirements
 
@@ -17,11 +17,11 @@ Claude Code plugin，在 Read 工具讀取圖片檔前攔截，透過 Gemini CLI
 
 ### R2: 獨立 plugin 共用基礎設施
 - **Level**: MUST
-- **Description**: `gemini-images` 為獨立 plugin 具獨立版號，與 `gemini` plugin 共用同一 marketplace 與 Gemini CLI OAuth。
+- **Description**: `gemini-images` 為獨立 plugin 具獨立版號，與 `gemini` plugin 共用同一 marketplace 與 agy OAuth。
 
 ### R3: System Prompt 注入
 - **Level**: MUST
-- **Description**: 呼叫 Gemini CLI 描述圖片時透過 `GEMINI_SYSTEM_MD` 環境變數指定場景化 system prompt，取代 Gemini 預設 system prompt。
+- **Description**: 場景化 system prompt 以 Markdown custom agent（`agy/agents/gemini-image-describe/agent.md`）預先安裝，hook 以 `--agent gemini-image-describe` 指定；agent 的 `tools` 白名單只給 `view_file`，實測仍可讀圖但無法寫檔或執行 shell。
 
 ### R4: 圖片描述輸出限制
 - **Level**: MUST
@@ -45,14 +45,14 @@ Claude Code plugin，在 Read 工具讀取圖片檔前攔截，透過 Gemini CLI
 
 ### R9: 環境診斷工具
 - **Level**: SHOULD
-- **Description**: 提供 `doctor.sh` 檢查 Required（gemini CLI、OAuth、node、jq、plugin 檔案）與 Optional（magick、sips、tesseract、chi_tra 語言包）依賴，支援 `--verbose` 顯示環境資訊。
+- **Description**: 提供 `doctor.sh` 檢查 Required（agy、OAuth、agent 是否已安裝、node、jq、plugin 檔案）與 Optional（magick、sips、tesseract、chi_tra 語言包）依賴，支援 `--verbose` 顯示環境資訊。agent 檢查為必要項：`--agent` 對未知名稱靜默忽略，未安裝時只會得到通用描述而非錯誤。
 
 ## Scenarios
 
 ### S1: 攔截圖片 Read
 - **Given**: 使用者觸發 Read 讀取 `screenshot.png`
 - **When**: PreToolUse hook 執行
-- **Then**: hook 透過 Gemini CLI 取得圖片描述並以 `updatedInput` 回傳文字，Claude 讀到文字而非圖片
+- **Then**: hook 透過 agy 取得圖片描述並以 `updatedInput` 回傳文字，Claude 讀到文字而非圖片
 - **Implements**: #R1, #R3
 
 ### S2: 非圖片檔放行
@@ -62,7 +62,7 @@ Claude Code plugin，在 Read 工具讀取圖片檔前攔截，透過 Gemini CLI
 - **Implements**: #R1
 
 ### S3: Gemini 與 OCR 雙失敗
-- **Given**: Gemini CLI 呼叫失敗且 OCR 失敗或未安裝
+- **Given**: agy 呼叫失敗且 OCR 失敗或未安裝
 - **When**: hook 結束
 - **Then**: hook 不輸出 `updatedInput`，Claude 讀原圖；stderr 印警告訊息
 - **Implements**: #R6

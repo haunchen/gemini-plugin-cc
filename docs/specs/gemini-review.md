@@ -7,13 +7,13 @@ last_modified: 2026-04-24
 
 # Gemini Review
 
-Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
+Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二意見的程式碼審查。使用者介面全在 Claude Code，agy 僅為執行後端。
 
 ## Requirements
 
 ### R1: Setup 檢查
 - **Level**: MUST
-- **Description**: /gemini:setup 依序檢查 Gemini CLI 安裝狀態、版本、Google OAuth 認證狀態，回報結果。
+- **Description**: /gemini:setup 依序檢查 agy 安裝狀態、版本（需 ≥ 1.1.6）、Google OAuth 認證狀態，安裝四個 agent，並驗證 agent 確實生效與 read-only 限制仍在，回報結果。
 
 ### R2: Review 輸入來源
 - **Level**: MUST
@@ -21,7 +21,7 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 
 ### R3: System Prompt 注入
 - **Level**: MUST
-- **Description**: 呼叫 Gemini CLI 時透過 GEMINI_SYSTEM_MD 環境變數指定場景化 system prompt。
+- **Description**: agy 無 per-call system prompt 注入機制，改以 Markdown custom agent 預先註冊場景化 system prompt（`agy/agents/<name>/agent.md`，H1 分隔字串固定為 `# Agent System Instructions`），command 以 `--agent <name>` 指定。`--agent` 對未知名稱靜默忽略，故 setup 必須主動驗證。
 
 ### R4: 結構化 Review 輸出
 - **Level**: MUST
@@ -37,11 +37,11 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 
 ### R7: 模型切換參數
 - **Level**: MUST
-- **Description**: 所有 command 支援 `--model <value>` 參數指定 Gemini 模型，未指定時 fallback 到 flash。
+- **Description**: 所有 command 支援 `--model <value>` 參數，別名 `pro` → `gemini-3.1-pro-high`、`flash` → `gemini-3.6-flash-high`，其餘值原樣傳給 agy。
 
 ### R8: Ask 提問功能
 - **Level**: MUST
-- **Description**: /gemini:ask 接受文字問題，可選附帶檔案路徑作為 context，透過 Gemini CLI 回答。輸出為自由格式。
+- **Description**: /gemini:ask 接受文字問題，可選附帶檔案路徑作為 context，透過 agy 回答。輸出為自由格式。
 
 ### R9: Adversarial Review
 - **Level**: MUST
@@ -65,16 +65,16 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 
 ### R14: Gemini subprocess tool policy
 - **Level**: MUST
-- **Description**: 四個呼叫 gemini CLI 的 command（review / adversarial-review / security-review / ask）一律透過 `--admin-policy` 傳入 read-only policy，只允許 `read_file` 與 `glob`，其餘工具（`run_shell_command` / `write_file` / `replace` / `web_fetch` / `web_search` / `mcp_*`）全擋。setup 不呼叫 gemini CLI 故不受影響。
+- **Description**: 四個呼叫 agy 的 command（review / adversarial-review / security-review / ask）所用的 agent 一律在 frontmatter 帶 `tools` 白名單，只允許 `view_file` 與 `find_by_name`。寫檔、shell、web、MCP 等工具不在 agent 工具集內，故 `--dangerously-skip-permissions` 亦無法繞過（實測對照確認）。
 
 ### R15: 統一 429 fallback
 - **Level**: MUST
-- **Description**: review / adversarial-review / security-review / ask 四個 command 呼叫 Gemini CLI 撞 429 / RESOURCE_EXHAUSTED / rate limit / overloaded 時，自動以 flash 重試一次；fallback 呼叫仍帶同一 policy。setup 不受影響。
+- **Description**: review / adversarial-review / security-review / ask 四個 command 呼叫 agy 撞 429 / RESOURCE_EXHAUSTED / rate limit / overloaded 時，自動以 `gemini-3.6-flash-high` 重試一次；fallback 呼叫仍指定同一 agent。setup 不受影響。
 
 ## Scenarios
 
 ### S1: 首次設定檢查
-- **Given**: 使用者尚未確認 Gemini CLI 環境
+- **Given**: 使用者尚未確認 agy 環境
 - **When**: 執行 /gemini:setup
 - **Then**: 依序顯示 CLI 安裝狀態、版本號、OAuth 認證狀態
 - **Implements**: #R1
@@ -82,19 +82,19 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 ### S2: 以 git diff 審查
 - **Given**: 工作目錄有未提交的變更
 - **When**: 執行 /gemini:review（無參數）
-- **Then**: 取 git diff HEAD 作為輸入，透過 Gemini CLI 產出結構化 review
+- **Then**: 取 git diff HEAD 作為輸入，透過 agy 產出結構化 review
 - **Implements**: #R2, #R3, #R4
 
 ### S3: 以指定檔案審查
 - **Given**: 使用者指定檔案路徑
 - **When**: 執行 /gemini:review src/index.js
-- **Then**: 讀取指定檔案內容作為輸入，透過 Gemini CLI 產出結構化 review
+- **Then**: 讀取指定檔案內容作為輸入，透過 agy 產出結構化 review
 - **Implements**: #R2, #R3, #R4
 
 ### S4: CLI 未安裝
-- **Given**: 系統未安裝 Gemini CLI
+- **Given**: 系統未安裝 agy
 - **When**: 執行 /gemini:review
-- **Then**: 提示使用者安裝 Gemini CLI 的方法
+- **Then**: 提示使用者安裝 agy 的方法
 - **Implements**: #R5
 
 ### S5: 無問題的 diff
@@ -125,20 +125,30 @@ Claude Code plugin，透過 Gemini CLI 提供第二意見的程式碼審查。
 - **Rationale**: Pro 系列透過 OAuth 頻繁 429（MODEL_CAPACITY_EXHAUSTED），flash 容量充裕且 code review 品質足夠。Phase 2 的 /gemini:config 再開放模型切換
 - **Date**: 2026-04-09
 
-### D5: Tool policy 共用單檔
+### D5: Tool policy 共用單檔（已由 D8 取代）
 - **Decision**: `plugins/gemini/policies/readonly.toml` 一份，四個 command 共用
 - **Rationale**: 四者安全需求一致（read-only 查證），分檔維護容易漂移
 - **Date**: 2026-04-24
 
-### D6: 不改 approval mode
+### D6: 不改 approval mode（已隨 Gemini CLI 淘汰）
 - **Decision**: 維持 Gemini CLI 預設 approval mode，僅靠 `--admin-policy` 限制
 - **Rationale**: 避開 Plan Mode → YOLO 切換陷阱與 Issue #20469 的 policy 被忽略情境
 - **Date**: 2026-04-24
 
-### D7: Admin-policy 單次呼叫帶入
+### D7: Admin-policy 單次呼叫帶入（已由 D8 取代）
 - **Decision**: 不寫到 `~/.gemini/policies/`，透過 `--admin-policy` 單次帶入
 - **Rationale**: 不污染使用者 Gemini CLI 個人設定，policy 生命週期與 plugin 綁定
 - **Date**: 2026-04-24
+
+### D8: 遷移到 agy，system prompt 改用 custom agent，policy 改用 tools 白名單
+- **Decision**: Gemini CLI 6/18 停服（實測回 `IneligibleTierError`）後全面改走 `agy`。system prompt 從 `GEMINI_SYSTEM_MD` per-call 注入改為預先安裝的 Markdown custom agent；`--admin-policy readonly.toml` 改為 agent frontmatter 的 `tools` 白名單（`view_file` / `find_by_name`）
+- **Rationale**: agy 1.1.6 起支援 Markdown custom agent，是唯一可用的 system prompt 注入點（eval 驗證 custom 10/10 vs bare 4/10，與 Gemini CLI 時代的 10/10 持平）。白名單比 policy 強：工具不存在於 agent 工具集，`--dangerously-skip-permissions` 也繞不過。代價是 plugin 從零安裝變成 setup 需真的佈署 agent，且 `--agent` 靜默忽略未知名稱，故 setup 與 doctor.sh 必須主動驗證
+- **Date**: 2026-07-31
+
+### D9: agy 端只安裝 agents，不安裝 commands
+- **Decision**: agy plugin 獨立於 `plugins/<plugin>/agy/`，只含 `plugin.json` + `agents/`
+- **Rationale**: 直接 `agy plugin install` 整個 CC plugin 會把 5 個 command 轉成 agy skill，內容是 CC command.md 逐字複製（含 `$ARGUMENTS` / `allowed-tools` 等不可攜語法），污染 agy skill 清單。agy 只需要 system prompt 容器
+- **Date**: 2026-07-31
 
 ## Pending Changes
 
