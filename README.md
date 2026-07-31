@@ -21,7 +21,7 @@ A marketplace of [Claude Code plugins](https://docs.anthropic.com/en/docs/claude
 
 | Plugin | Purpose | Triggers |
 |--------|---------|----------|
-| [`gemini`](plugins/gemini/) | Slash commands for code review, ask, adversarial review, security review | `/gemini:*` |
+| [`gemini`](plugins/gemini/) | Slash commands for code review, ask, adversarial review | `/gemini:*` |
 | [`gemini-images`](plugins/gemini-images/) | PreToolUse hook that converts image Reads into text descriptions to protect prompt cache | Automatic on `Read` image files |
 
 Both plugins share the same agy OAuth credentials. Install one or both.
@@ -44,7 +44,7 @@ Plugin-specific extra dependencies are listed in each plugin's README.
 
 Restart Claude Code after installation.
 
-For `gemini`, run `/gemini:setup` — this is **required**, not just a check: it installs the four system prompts into agy as agents. Without it the commands still run but produce generic, unstructured output.
+For `gemini`, run `/gemini:setup` — this is **required**, not just a check: it installs the three system prompts into agy as agents. Without it the commands still run but produce generic, unstructured output.
 
 For `gemini-images`, install its agent and verify:
 
@@ -59,13 +59,14 @@ bash plugins/gemini-images/scripts/doctor.sh
 - `/gemini:review [path] [--model <m>]` — code review (default model: 3.6 Flash, high effort)
 - `/gemini:ask <question> [file] [--model <m>]` — free-form technical question
 - `/gemini:adversarial-review [path] [--model <m>]` — devil's advocate design challenge
-- `/gemini:security-review [path] [--model <m>]` — OWASP-focused security review
+
+> A `/gemini:security-review` command existed up to v0.1.0. It was removed in v0.2.0: agy declines security-audit requests (17 of 20 eval calls came back as "Sorry, I cannot fulfill your request to analyze or identify vulnerabilities"), even on a clean rename diff, so the command could not do its job. `/gemini:review` still flags security defects — it caught a SQL injection as `[HIGH]` on the same test case that the security command was refused on.
 
 ## Security
 
 Each agent carries a `tools` whitelist in its frontmatter — only `view_file` and `find_by_name`. Writing files, running shell commands, web access and MCP tools are not in the agent's toolset at all, so there is nothing to bypass: the restriction holds even under `--dangerously-skip-permissions`. `/gemini:setup` verifies this on every run.
 
-This keeps the review / ask / adversarial-review / security-review commands focused on inspection. If you need Gemini to execute shell commands or modify files, invoke `agy` directly instead of going through this plugin.
+This keeps the review / ask / adversarial-review commands focused on inspection. If you need Gemini to execute shell commands or modify files, invoke `agy` directly instead of going through this plugin.
 
 ## Project Structure
 

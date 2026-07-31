@@ -1,4 +1,4 @@
-description: "Security-review agent eval — custom system prompt vs bare model (flash)"
+description: "Security-review agent eval — PARKED: the security-review command was removed in v0.2.0 because agy refuses security-audit requests (17/20 calls refused). Test cases and rubrics are kept for whenever the command comes back."
 
 providers:
   - id: "exec: bash ./run-agy.sh - gemini-3.6-flash-high"

@@ -49,7 +49,7 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 
 ### R10: Security Review
 - **Level**: MUST
-- **Description**: /gemini:security-review 專攻安全漏洞檢查（OWASP Top 10、CSRF、供應鏈 CVE、secrets 掃描、HTTP 標頭等），輸出包含 Security Summary、Vulnerabilities（含攻擊範例、CWE 編號、驗證方法）、Verdict（SECURE/CONCERNS/VULNERABLE）。
+- **Description**（已由 D12 移除）: 原 /gemini:security-review 專攻安全漏洞檢查（OWASP Top 10、CSRF、供應鏈 CVE、secrets 掃描、HTTP 標頭等）。v0.2.0 起移除，理由見 D12。
 
 ### R11: Security Review 四級嚴重度
 - **Level**: MUST
@@ -65,11 +65,11 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 
 ### R14: Gemini subprocess tool policy
 - **Level**: MUST
-- **Description**: 四個呼叫 agy 的 command（review / adversarial-review / security-review / ask）所用的 agent 一律在 frontmatter 帶 `tools` 白名單，只允許 `view_file` 與 `find_by_name`。寫檔、shell、web、MCP 等工具不在 agent 工具集內，故 `--dangerously-skip-permissions` 亦無法繞過（實測對照確認）。
+- **Description**: 三個呼叫 agy 的 command（review / adversarial-review / ask）所用的 agent 一律在 frontmatter 帶 `tools` 白名單，只允許 `view_file` 與 `find_by_name`。寫檔、shell、web、MCP 等工具不在 agent 工具集內，故 `--dangerously-skip-permissions` 亦無法繞過（實測對照確認）。
 
 ### R15: 統一 429 fallback
 - **Level**: MUST
-- **Description**（已由 D11 移除）: 原本 review / adversarial-review / security-review / ask 撞 429 / RESOURCE_EXHAUSTED / rate limit / overloaded 時會自動降級重試。現行行為為不自動 fallback，錯誤原樣呈現給使用者，由使用者決定重試或改 `--model`。
+- **Description**（已由 D11 移除）: 原本 review / adversarial-review / ask 撞 429 / RESOURCE_EXHAUSTED / rate limit / overloaded 時會自動降級重試。現行行為為不自動 fallback，錯誤原樣呈現給使用者，由使用者決定重試或改 `--model`。
 
 ## Scenarios
 
@@ -158,6 +158,11 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 ### D11: 移除自動 fallback
 - **Decision**: 四個 command 不再於 429 / quota 錯誤時自動改用其他模型，錯誤直接呈現，並提示可用 `--model` 改選
 - **Rationale**: fallback 的原始理由是 Pro 頻繁 429（D4），D10 取消 Pro 預設後該前提消失。預設已是 3.6 flash-high，退回同一 slug 等於原地重試；改指 3.5 flash 則建立在「不同模型走不同配額池」的推論上，而 agy 沒有任何配額文件可佐證，effort 檔位是否獨立計費亦未知。與其保留一個依據不明、且會靜默改變使用者拿到的模型的行為，不如讓錯誤可見
+- **Date**: 2026-07-31
+
+### D12: 移除 security-review command
+- **Decision**: v0.2.0 起移除 `/gemini:security-review` 與 `gemini-security-review` agent。eval test case 與 rubric 保留（`eval/test-cases/security/`、兩份 security config 標為 PARKED）
+- **Rationale**: agy harness 對安全審查請求有拒答政策，實測 20 次呼叫 17 次回「Sorry, I cannot fulfill your request to analyze or identify vulnerabilities」，custom 1/10、baseline 2/10；連 app-rename 這種零風險乾淨 diff 都被拒，故與 diff 內容無關。Gemini CLI 時代同一份 prompt 是 10/10，是 agy 的限制而非 prompt 退化。已試防禦性框架改寫（角色改 pre-merge reviewer、不要求 attack payload）仍被拒，觸發面涵蓋整份 prompt 的 Vulnerabilities / attacker / VULNERABLE 結構。與其出貨一個會回拒絕訊息的 command，不如移除。註：能力本身仍在——同一個 SQL injection diff 交給 `gemini-review` agent 可正確標出 [HIGH] SQL injection，故安全向度的檢查暫由 /gemini:review 承接
 - **Date**: 2026-07-31
 
 ## Pending Changes

@@ -1,4 +1,4 @@
-description: "Security-review agent eval — Pro model comparison"
+description: "Security-review agent eval (Pro) — PARKED: see promptfooconfig-security.yaml"
 
 providers:
   - id: "exec: bash ./run-agy.sh - gemini-3.1-pro-high"

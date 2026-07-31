@@ -38,11 +38,10 @@ Determine the absolute path to the plugin root (the parent of the `commands/` di
 
 Run: `agy plugin install "<plugin-root>/agy"`
 
-Expect `agents : 4 processed` in the output. This installs four read-only agents into `~/.gemini/config/plugins/gemini-agents/`:
+Expect `agents : 3 processed` in the output. This installs three read-only agents into `~/.gemini/config/plugins/gemini-agents/`:
 
 - `gemini-review` — used by `/gemini:review`
 - `gemini-adversarial-review` — used by `/gemini:adversarial-review`
-- `gemini-security-review` — used by `/gemini:security-review`
 - `gemini-ask` — used by `/gemini:ask`
 
 Re-running this command upgrades an existing install in place.

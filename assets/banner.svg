@@ -81,7 +81,7 @@
 
   <g font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="14" fill="#94A3B8">
     <text x="80" y="540">
-      <tspan fill="#64748B">commands:</tspan> review · ask · adversarial-review · security-review · config · setup
+      <tspan fill="#64748B">commands:</tspan> review · ask · adversarial-review · setup
     </text>
     <text x="80" y="568">
       <tspan fill="#64748B">auth:</tspan> Google OAuth

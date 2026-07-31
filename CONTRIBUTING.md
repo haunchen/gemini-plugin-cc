@@ -37,8 +37,11 @@ agy plugin install "$(pwd)/plugins/gemini/agy"
 cd eval
 npx promptfoo@latest eval -c promptfooconfig.yaml               # review, flash
 npx promptfoo@latest eval -c promptfooconfig-pro.yaml           # review, pro
-npx promptfoo@latest eval -c promptfooconfig-security.yaml      # security, flash
-npx promptfoo@latest eval -c promptfooconfig-security-pro.yaml  # security, pro
+
+# Parked — the security-review command was removed in v0.2.0 (agy declines
+# security-audit requests). Configs and test cases are kept for its return.
+# npx promptfoo@latest eval -c promptfooconfig-security.yaml
+# npx promptfoo@latest eval -c promptfooconfig-security-pro.yaml
 ```
 
 Each config runs two providers — bare model vs custom agent — through the shared `run-agy.sh <agent|-> <model-slug>` runner.

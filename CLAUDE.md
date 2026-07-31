@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Claude Code plugin marketplace that reaches Gemini through the Antigravity CLI (`agy`). Two plugins share the same Google OAuth credentials:
 
-- **`gemini`** — slash commands for code review, ask, adversarial review, security review. Pure Markdown commands + agent definitions, no JS runtime.
+- **`gemini`** — slash commands for code review, ask, adversarial review. Pure Markdown commands + agent definitions, no JS runtime.
 - **`gemini-images`** — PreToolUse hook that replaces image `Read` calls with Gemini-generated text descriptions, protecting Anthropic's prompt cache.
 
 Everything user-facing stays in Claude Code. `agy` is only the backend that runs Gemini — the plugins are not installed into agy as skills.
@@ -19,7 +19,7 @@ Marketplace registry at `/.claude-plugin/marketplace.json` points at two plugin 
 .claude-plugin/marketplace.json          # marketplace registry (2 plugins)
 plugins/gemini/
   .claude-plugin/plugin.json
-  commands/                              # /gemini:setup, review, ask, adversarial-review, security-review
+  commands/                              # /gemini:setup, review, ask, adversarial-review
   agy/plugin.json                        # agy-side plugin — agents only, no commands
   agy/agents/<name>/agent.md             # system prompts, installed via `agy plugin install`
 plugins/gemini-images/
