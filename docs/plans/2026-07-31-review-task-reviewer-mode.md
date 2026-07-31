@@ -152,14 +152,30 @@ Files:
 
 Interfaces:
 - Consumes: Task 1 的 `VIEW_FILE_WORKS`
-- Produces: agent 認得 `=== REQUIREMENTS (what this change is supposed to do) ===` 與 `=== CHANGE UNDER REVIEW ===` 兩個分隔字串，Task 3 的 command 與 Task 4 的測試素材必須逐字產出這兩行——括號內的說明文字是字串的一部分，不可省略
+- Produces: agent 認得三個分隔字串 `=== REPOSITORY ROOT ===`、`=== REQUIREMENTS (what this change is supposed to do) ===`、`=== CHANGE UNDER REVIEW ===`。Task 3 的 command 與 Task 4 的測試素材必須逐字產出——括號內的說明文字是字串的一部分，不可省略
 
-Step 1: 依 Task 1 結論決定外查段落
+Step 1: Task 1 的實測結論（已完成，controller 執行）
 
-- `VIEW_FILE_WORKS = true`（相對路徑可行）→ 用 Step 2 的全文，不改。
-- `VIEW_FILE_WORKS = true` 但僅絕對路徑可行 → 用 Step 2 全文，並在 `### When to look outside the diff` 末尾加一行：
-  `Use an absolute path when calling view_file; relative paths do not resolve.`
-- `VIEW_FILE_WORKS = false` → 把 `### When to look outside the diff` 整段替換為：
+`VIEW_FILE_WORKS = true`，但**僅絕對路徑可行**：
+
+```
+$ agy -p "Read this file: plugins/gemini/commands/review.md" --agent viewfile-probe ...
+TOOL_RESULT: FAILED
+LINE1: failed to read file: open C:/plugins/gemini/commands/review.md: The system cannot find the path specified.
+
+$ agy -p "Read this file: D:/UserData/Documents/Code/gemini-plugin-cc/plugins/gemini/commands/review.md" ...
+TOOL_RESULT: OK
+LINE1: ---
+```
+
+agy 的工作目錄不是呼叫端的 cwd，repo 相對路徑會被解析到磁碟根。因此 Step 2 的全文已納入兩項調整，直接照用即可：
+
+1. agent.md 明寫 `view_file` 需要絕對路徑，並從輸入的 `=== REPOSITORY ROOT ===` 區塊取得 repo 根路徑來拼接。
+2. 沒有該區塊時（例如 eval 情境，diff 來自別的專案）不得嘗試外查，改為報告風險並指出使用者該查什麼。
+
+Task 3 的 command 負責產出該區塊，兩者必須成對——只改一邊，外查功能就是死的。
+
+（以下為原 plan 的備援分支，實測已排除，保留供日後 agy 行為改變時參考。若某天 `view_file` 連絕對路徑都失效，把 `### When to look outside the diff` 整段替換為：）
 
   ```markdown
   ### When the risk lives outside the diff
@@ -215,6 +231,10 @@ These are nameable risks, and checking call sites is the right move for each:
 - The diff deletes or renames a symbol that may still be referenced elsewhere
 
 "I would like to look around" is not a nameable risk. If you cannot name the risk before you look, do not look.
+
+`view_file` requires an **absolute** path; a repo-relative path resolves against the wrong root and fails. When the input carries a `=== REPOSITORY ROOT ===` section, join that root with the path from the diff header to build one.
+
+When the input has no `=== REPOSITORY ROOT ===` section, you cannot read anything outside the input at all. Report the risk as a finding, state exactly what the user should check, and never state a conclusion about code you have not seen.
 
 ## Claims Are Not Evidence
 
@@ -372,7 +392,7 @@ Files:
 - Modify: `plugins/gemini/commands/review.md`（frontmatter `argument-hint`、Step 1、Step 2、Step 3）
 
 Interfaces:
-- Consumes: Task 2 定義的分隔字串 `=== REQUIREMENTS (what this change is supposed to do) ===` 與 `=== CHANGE UNDER REVIEW ===`，必須逐字相符
+- Consumes: Task 2 定義的三個分隔字串 `=== REPOSITORY ROOT ===`、`=== REQUIREMENTS (what this change is supposed to do) ===`、`=== CHANGE UNDER REVIEW ===`，必須逐字相符
 - Produces: 無下游 task 依賴
 
 Step 1: 更新 frontmatter 的 argument-hint
@@ -431,18 +451,33 @@ Step 4: 改寫 Step 3 的 stdin 組裝
 
 The system prompt lives in the `gemini-review` agent, installed by `/gemini:setup`. The agent's `tools` whitelist keeps the run read-only — there is no separate policy file.
 
-Assemble PAYLOAD (the variable the bash command below reads). If SPEC_INPUT is empty, PAYLOAD is REVIEW_INPUT unchanged — do **not** emit an empty REQUIREMENTS section, because the agent decides whether to return a spec-compliance verdict purely by whether that section is present.
+Assemble PAYLOAD (the variable the bash command below reads) from up to three sections.
 
-If SPEC_INPUT is non-empty, PAYLOAD is:
+First get the repository root:
+
+```bash
+git rev-parse --show-toplevel 2>/dev/null
+```
+
+The agent's `view_file` only accepts absolute paths — agy does not run in this shell's working directory, so a repo-relative path resolves against the wrong root. Handing it the root is what lets it check a call site when it spots a nameable risk. If the command fails (not a git repo), omit the section entirely; the agent then reports such risks for the user to check instead of reading files.
+
+PAYLOAD is the concatenation of whichever of these apply, in this order:
 
 ```
+=== REPOSITORY ROOT ===
+{absolute path from git rev-parse --show-toplevel}
 === REQUIREMENTS (what this change is supposed to do) ===
 {SPEC_INPUT}
 === CHANGE UNDER REVIEW ===
 {REVIEW_INPUT}
 ```
 
-The two `===` marker lines must be reproduced verbatim; the agent matches on them.
+- Omit the REPOSITORY ROOT section when not in a git repo.
+- Omit the REQUIREMENTS section when SPEC_INPUT is empty. Do **not** emit it empty — the agent decides whether to return a spec-compliance verdict purely by whether that section is present.
+- When both are omitted, PAYLOAD is REVIEW_INPUT unchanged.
+- Whenever any section is present, the `=== CHANGE UNDER REVIEW ===` line must precede REVIEW_INPUT.
+
+All `===` marker lines must be reproduced verbatim, including the parenthetical in the REQUIREMENTS marker; the agent matches on them.
 
 Run the following bash command, passing PAYLOAD via stdin to avoid shell escaping issues:
 
@@ -462,7 +497,8 @@ command 本身是 Markdown 指示，只有 Claude Code 讀它才會執行；suba
 
 Run:
 ```bash
-{ printf '=== REQUIREMENTS (what this change is supposed to do) ===\n'; \
+{ printf '=== REPOSITORY ROOT ===\n%s\n' "$(git rev-parse --show-toplevel)"; \
+  printf '=== REQUIREMENTS (what this change is supposed to do) ===\n'; \
   sed -n '/^### R16/,/^### D13/p' docs/specs/gemini-review.md; \
   printf '\n=== CHANGE UNDER REVIEW ===\n'; \
   cat eval/test-cases/app-rename.diff; } \
@@ -474,9 +510,9 @@ Step 6: 逐字比對分隔字串
 
 Run:
 ```bash
-grep -n 'REQUIREMENTS (what this change is supposed to do)\|CHANGE UNDER REVIEW' plugins/gemini/commands/review.md plugins/gemini/agy/agents/gemini-review/agent.md
+grep -n 'REPOSITORY ROOT\|REQUIREMENTS (what this change is supposed to do)\|CHANGE UNDER REVIEW' plugins/gemini/commands/review.md plugins/gemini/agy/agents/gemini-review/agent.md
 ```
-Expected: 兩個檔案都出現這兩個字串，且括號內文字完全一致。任何一邊少了括號說明，agent 的條件判斷就會永遠不成立。
+Expected: 兩個檔案都出現這三個字串，且括號內文字完全一致。任何一邊少了括號說明，agent 的條件判斷就會永遠不成立；少了 REPOSITORY ROOT，外查功能是死的。
 
 command 側的參數解析（`--spec` 與 `--model` 混合順序、glob 展開、檔案不存在時停下）由 controller 在所有 task 完成後於主對話實跑 `/gemini:review` 驗證，不在本 task 範圍。
 

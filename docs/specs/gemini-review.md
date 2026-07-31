@@ -177,7 +177,7 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 
 ### ADDED R17: 具名風險的聚焦外查
 - **Level**: MUST
-- **Description**: 僅在讀碼產生具體可命名的風險（函式或 API 契約變更、鎖順序、共享可變狀態、刪改可能仍有引用的符號）時，才以 `view_file` / `find_by_name` 檢查 diff 外程式碼；一個風險一次聚焦檢查，並於 finding 內同時寫出風險、查了什麼、看到什麼。取代原「一律不看 diff 外」的規則——語意由「不准看」改為「不准臆測，但可以查證」。
+- **Description**: 僅在讀碼產生具體可命名的風險（函式或 API 契約變更、鎖順序、共享可變狀態、刪改可能仍有引用的符號）時，才以 `view_file` / `find_by_name` 檢查 diff 外程式碼；一個風險一次聚焦檢查，並於 finding 內同時寫出風險、查了什麼、看到什麼。取代原「一律不看 diff 外」的規則——語意由「不准看」改為「不准臆測，但可以查證」。實測約束：agy 的 `view_file` 只接受絕對路徑（相對路徑會解析到磁碟根），故 command 需在 payload 附 `=== REPOSITORY ROOT ===` 區塊供 agent 拼路徑；無該區塊時 agent 不得外查，改為報告風險並指出使用者該查什麼。
 
 ### ADDED R18: 宣稱不等於證據
 - **Level**: MUST
