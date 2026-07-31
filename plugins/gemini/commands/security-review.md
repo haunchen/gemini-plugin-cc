@@ -10,11 +10,11 @@ Get a security-focused review using Gemini via the Antigravity CLI (`agy`). This
 
 Check if $ARGUMENTS contains `--model <value>`:
 - If yes: extract the value as MODEL, remove `--model <value>` from $ARGUMENTS
-- If no: set MODEL = pro
+- If no: set MODEL = flash
 
 Map the alias to an agy model slug:
-- `pro` → `gemini-3.1-pro-high`
-- `flash` → `gemini-3.6-flash-high`
+- `flash` → `gemini-3.6-flash-high` (the default)
+- `pro` → `gemini-3.1-pro-high` — an older generation than 3.6 flash; available for explicit opt-in, not recommended
 - Anything else is passed through unchanged (run `agy models` to list available slugs).
 
 ## Step 2: Determine input
@@ -40,8 +40,8 @@ Run the following bash command, passing REVIEW_INPUT via stdin:
 output=$(printf "%s" "$REVIEW_INPUT" | agy --agent gemini-security-review --model $MODEL --print-timeout 5m 2>&1)
 exit_code=$?
 if [ $exit_code -ne 0 ] && echo "$output" | grep -qi "429\|quota\|RESOURCE_EXHAUSTED\|rate limit\|overloaded"; then
-  echo "[Fallback] $MODEL unavailable (quota/rate limit), retrying with flash..." >&2
-  output=$(printf "%s" "$REVIEW_INPUT" | agy --agent gemini-security-review --model gemini-3.6-flash-high --print-timeout 5m 2>&1)
+  echo "[Fallback] $MODEL unavailable (quota/rate limit), retrying with 3.5 flash..." >&2
+  output=$(printf "%s" "$REVIEW_INPUT" | agy --agent gemini-security-review --model gemini-3.5-flash-high --print-timeout 5m 2>&1)
 fi
 echo "$output"
 ```

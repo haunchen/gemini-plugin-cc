@@ -37,7 +37,7 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 
 ### R7: 模型切換參數
 - **Level**: MUST
-- **Description**: 所有 command 支援 `--model <value>` 參數，別名 `pro` → `gemini-3.1-pro-high`、`flash` → `gemini-3.6-flash-high`，其餘值原樣傳給 agy。
+- **Description**: 所有 command 支援 `--model <value>` 參數，未指定時一律 `gemini-3.6-flash-high`（effort 固定 high）。別名 `flash` → `gemini-3.6-flash-high`、`pro` → `gemini-3.1-pro-high`（保留供明示選用），其餘值原樣傳給 agy。
 
 ### R8: Ask 提問功能
 - **Level**: MUST
@@ -69,7 +69,7 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 
 ### R15: 統一 429 fallback
 - **Level**: MUST
-- **Description**: review / adversarial-review / security-review / ask 四個 command 呼叫 agy 撞 429 / RESOURCE_EXHAUSTED / rate limit / overloaded 時，自動以 `gemini-3.6-flash-high` 重試一次；fallback 呼叫仍指定同一 agent。setup 不受影響。
+- **Description**: review / adversarial-review / security-review / ask 四個 command 呼叫 agy 撞 429 / RESOURCE_EXHAUSTED / rate limit / overloaded 時，自動以 `gemini-3.5-flash-high` 重試一次（換模型池而非降 effort）；fallback 呼叫仍指定同一 agent。setup 不受影響。
 
 ## Scenarios
 
@@ -120,7 +120,7 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Rationale**: PASS 對應無問題或僅 LOW，NEEDS_CHANGES 對應 MEDIUM，CRITICAL 對應 HIGH，與 severity 直接對應便於未來 Review Gate 自動化判斷
 - **Date**: 2026-04-09
 
-### D4: 預設使用 Gemini Pro 模型
+### D4: 預設使用 Gemini Pro 模型（已由 D10 取代）
 - **Decision**: review command 硬編碼 `-m flash`（CLI 別名，自動解析到最新 flash 版本）
 - **Rationale**: Pro 系列透過 OAuth 頻繁 429（MODEL_CAPACITY_EXHAUSTED），flash 容量充裕且 code review 品質足夠。Phase 2 的 /gemini:config 再開放模型切換
 - **Date**: 2026-04-09
@@ -148,6 +148,11 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 ### D9: agy 端只安裝 agents，不安裝 commands
 - **Decision**: agy plugin 獨立於 `plugins/<plugin>/agy/`，只含 `plugin.json` + `agents/`
 - **Rationale**: 直接 `agy plugin install` 整個 CC plugin 會把 5 個 command 轉成 agy skill，內容是 CC command.md 逐字複製（含 `$ARGUMENTS` / `allowed-tools` 等不可攜語法），污染 agy skill 清單。agy 只需要 system prompt 容器
+- **Date**: 2026-07-31
+
+### D10: 取消 Pro 預設，全面改用 3.6 flash-high
+- **Decision**: 四個 command 預設一律 `gemini-3.6-flash-high`，effort 固定 high；429 fallback 目標從 flash 改為 `gemini-3.5-flash-high`。`pro` 別名保留但不再是預設
+- **Rationale**: agy 的 Pro 是 `gemini-3.1-pro`，比 3.6 flash 落後兩個世代，2026-04-16 訂 Pro routing 時「Pro 品質 > Flash」的前提已反轉；flash-high 在 review eval 拿 10/10 滿分，無品質缺口需要 Pro 補；Pro 頻繁 429 本來就是 fallback 邏輯的存在理由，預設改 flash 後這個痛點一併消失。fallback 改指 3.5 flash 是因為預設已是 3.6 flash-high，退回同一個 slug 等於原地重試——換模型池的推論尚未實測，effort 檔位是否影響配額亦未知
 - **Date**: 2026-07-31
 
 ## Pending Changes

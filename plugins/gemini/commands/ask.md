@@ -13,8 +13,8 @@ Check if $ARGUMENTS contains `--model <value>`:
 - If no: set MODEL = flash
 
 Map the alias to an agy model slug:
-- `flash` → `gemini-3.6-flash-high`
-- `pro` → `gemini-3.1-pro-high`
+- `flash` → `gemini-3.6-flash-high` (the default)
+- `pro` → `gemini-3.1-pro-high` — an older generation than 3.6 flash; available for explicit opt-in, not recommended
 - Anything else is passed through unchanged (run `agy models` to list available slugs).
 
 ## Step 2: Determine input
@@ -48,8 +48,8 @@ Run the following bash command, passing ASK_INPUT via stdin. If the model hits a
 output=$(printf "%s" "$ASK_INPUT" | agy --agent gemini-ask --model $MODEL --print-timeout 5m 2>&1)
 exit_code=$?
 if [ $exit_code -ne 0 ] && echo "$output" | grep -qi "429\|quota\|RESOURCE_EXHAUSTED\|rate limit\|overloaded"; then
-  echo "[Fallback] $MODEL unavailable (quota/rate limit), retrying with flash..." >&2
-  output=$(printf "%s" "$ASK_INPUT" | agy --agent gemini-ask --model gemini-3.6-flash-high --print-timeout 5m 2>&1)
+  echo "[Fallback] $MODEL unavailable (quota/rate limit), retrying with 3.5 flash..." >&2
+  output=$(printf "%s" "$ASK_INPUT" | agy --agent gemini-ask --model gemini-3.5-flash-high --print-timeout 5m 2>&1)
 fi
 echo "$output"
 ```

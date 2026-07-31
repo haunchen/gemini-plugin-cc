@@ -56,7 +56,7 @@ bash plugins/gemini-images/scripts/doctor.sh
 ## Commands (gemini plugin)
 
 - `/gemini:setup` — check agy, install the agents, verify they took effect
-- `/gemini:review [path] [--model <m>]` — code review (default model: Pro with Flash fallback)
+- `/gemini:review [path] [--model <m>]` — code review (default model: 3.6 Flash, high effort)
 - `/gemini:ask <question> [file] [--model <m>]` — free-form technical question
 - `/gemini:adversarial-review [path] [--model <m>]` — devil's advocate design challenge
 - `/gemini:security-review [path] [--model <m>]` — OWASP-focused security review
