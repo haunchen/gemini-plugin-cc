@@ -68,6 +68,7 @@ When changing an agent's system prompt, run the relevant eval before and after. 
 - [ ] If you touched `gemini-images/hooks/`, `doctor.sh` still passes on your OS
 - [ ] No secrets, API keys, or personal paths in commits (the `tools` whitelist in each `agy/agents/*/agent.md` is the second line of defense — keep it minimal)
 - [ ] README / CLAUDE.md updated if behavior changed
+- [ ] Version bumped and `CHANGELOG.md` updated if the change reaches users — see [Versioning](CLAUDE.md#versioning). Editing an agent's system prompt counts: it does not reach an existing install until they re-run setup, and nothing warns them
 
 ## Reporting issues
 
