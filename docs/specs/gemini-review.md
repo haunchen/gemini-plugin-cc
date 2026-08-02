@@ -2,7 +2,7 @@
 domain: gemini-review
 status: active
 created: 2026-04-09
-last_modified: 2026-07-31
+last_modified: 2026-08-02
 ---
 
 # Gemini Review
@@ -231,3 +231,9 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Decision**: 以 SessionStart bash hook 比對兩份 `plugin.json` 的 version 欄位，而非讓 agent 在 review 輸出帶版本字串，也不在每個 command 開頭檢查
 - **Rationale**: 偵測所需的資料早就存在——`agy plugin install` 是逐字複製，連 `plugin.json` 一併裝進 `~/.gemini/config/plugins/gemini-agents/`，所以不必新增任何 metadata。選 hook 而非 per-command 檢查：每 session 只跑一次而非每次 review，且不必改三個 command、未來新增 command 自動涵蓋。不選輸出印記：那會污染 review 輸出，與「Gemini 輸出必須逐字呈現、不重排」直接衝突。找不到已安裝 manifest 時選擇靜默而非報「未安裝」：agy 在其他平台的 config 路徑未經實測，猜錯會變成每個 session 都誤報，而「完全沒安裝」本來就有既有訊號（review 輸出沒有 `## Verdict:` 結構）。bash 實作不違反零程式碼約束——原文限制的是 JS runtime，`gemini-images` 的 hook 入口本就是 `.sh`
 - **Date**: 2026-07-31
+
+### D18: 讀檔權限用 `--add-dir` 授權，不改全域 settings
+- **Decision**: `/gemini:review` 呼叫 agy 時加 `--add-dir "$ROOT"`（`$ROOT` 即 payload 內 `=== REPOSITORY ROOT ===` 的同一個值），無 git root 時兩者一併省略。權限被拒時降級重跑一次（拿掉 ROOT 區塊與 `--add-dir`），並在回報中說明本次無查證能力
+- **Rationale**: agy 的 `view_file` 背後權限名為 `read_file`，headless 無法跳確認提示故一律 soft-deny，且該拒絕會丟掉整個 turn——command 拿回的是一行 `no output produced`，不是少一個 finding 的 review。D9 為此建立的整套 nameable-risk 查證規則因而全程失效。實測（agy 1.1.9，rename 已匯出符號的 diff）：不帶 flag 2/2 被拒，帶 flag 2/2 完成；輸出差異是「callers may need updating, not verifiable」的 LOW 對上指名兩個實際 import 檔的 HIGH。選 `--add-dir` 而非 `~/.gemini/settings.json` 的 `permissions.allow`：後者是每台機器的設定，無法隨 plugin 出貨，別人裝了照樣壞。不選 `--dangerously-skip-permissions`：既有約束禁止，且 `--add-dir` 已足夠。三個 command 的錯誤處理同步更正——原本把「輸出沒有 `## Verdict:`」一律讀成 agent 未安裝並導向 `/gemini:setup`，對本失敗模式是錯的指引。此失敗非確定性（是否讀檔取決於 diff 內容），這正是它長期未被發現的原因
+- **Date**: 2026-08-02
+

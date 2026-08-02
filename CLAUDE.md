@@ -65,6 +65,24 @@ echo "$INPUT" | agy --agent gemini-review --model "$MODEL" --print-timeout 5m 2>
 
 All commands default to `gemini-3.6-flash-high` with effort pinned to `high`. There is no automatic fallback: a quota / rate-limit error surfaces to the user, who can retry or pick another model with `--model`.
 
+### A whitelisted tool is not a permitted tool
+
+The `tools` whitelist decides what the agent *has*. A second, independent layer decides whether a given call is *allowed*, and a headless run cannot show a permission prompt — so agy soft-denies anything that would need one. That denial does not fail just the tool call. It discards the whole turn, and the command gets back one line of prose where a review should be:
+
+```
+jetski: no output produced — a tool required the "read_file" permission that headless mode
+cannot prompt for, so it was auto-denied.
+```
+
+This lands on `view_file`, whose permission is named `read_file` — the one capability the review agent is supposed to have. Measured on agy 1.1.9 with a diff that renames an exported symbol, which is a nameable risk under `agent.md`'s lookup rule: 2/2 runs denied with `=== REPOSITORY ROOT ===` present, 3/3 completed with it removed. It is not deterministic in general, because whether the agent reaches for a file depends on what it finds in the diff — the same review can pass one run and vanish the next.
+
+Two dead ends, both measured, so nobody re-walks them:
+
+- **Adding `read_file` to the `tools` whitelist.** The agent then fails outright with `Error: Agent execution terminated due to error.` It is not a valid tool name; the whitelist was never what blocked it.
+- **Reasoning from a synthetic probe agent.** `agy plugin install` reports `agents : N processed` and writes the files, yet the agents may still not register — check `agy agents` for the name, because `--agent` silently ignores what it cannot resolve and runs the *default* agent, which has full tools. A probe built this way looks like it proves the whitelist is inert. It proves nothing.
+
+`review.md` handles this by re-running once without the ROOT section, which downgrades the agent to reporting risks instead of checking them. A `permissions.allow` rule in `~/.gemini/settings.json` is the other half of the fix, but it is per-machine and cannot ship with the plugin.
+
 ### The review payload markers
 
 `/gemini:review` does not just pipe a diff. It assembles up to three labelled sections, and the agent decides what to do by matching those labels **literally**:
@@ -114,19 +132,22 @@ The two `promptfooconfig-security*.yaml` configs are PARKED — the command they
 
 agy exposes no sampling controls, so eval runs vary more than the pre-0.2.0 numbers, which were pinned to `temperature: 0` via a `.gemini/settings.json` that no longer applies.
 
+**The suite does not reproduce how the command actually runs.** `run-agy.sh` passes no `--add-dir`, so the agent cannot open a single file, while `/gemini:review` has granted that since 0.2.2. The regime is not a detail: with no file access the reviewer has to guess about anything outside the diff, and with access it can check. Numbers from the suite describe the blind regime, not what a user sees.
+
 Judge note: the rubric provider must be a current model. `claude-sonnet-4-20250514` is retired (404) and promptfoo ≤ 0.121.5 sends a deprecated `temperature` to newer models (400) — either failure grades every case FAIL regardless of output quality. Use promptfoo `@latest`.
 
 ## Versioning
 
 The two plugins version independently — bump only the one you changed. They happen to both sit at 0.2.0 because the agy migration touched both.
 
-A version lives in **three** files per plugin, and they must move together:
+Two files carry the plugin's version and always move together:
 
 ```
 .claude-plugin/marketplace.json          # the plugin's entry in the plugins[] array
 plugins/<plugin>/.claude-plugin/plugin.json
-plugins/<plugin>/agy/plugin.json         # follows its parent plugin's version
 ```
+
+A third file, `plugins/<plugin>/agy/plugin.json`, versions the agents rather than the plugin. **Move it only when an `agy/agents/*/agent.md` actually changed**, and then set it to the same version as its parent so the two stay legible side by side. It used to be described as following the parent unconditionally; that is wrong, and 0.2.2 is where it stopped. `check-agent-version.sh` compares exactly this file, so bumping it for a change the agents did not see fires "your prompts are stale" at people whose prompts are current — the failure the hook's own comment warns about, where a notice that cries wolf gets ignored on the session where it matters.
 
 Pre-1.0, bump by what the change costs the user:
 

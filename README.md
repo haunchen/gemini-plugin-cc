@@ -96,6 +96,12 @@ All Required checks must pass. Optional warnings are fine for basic use but redu
 
 ## Troubleshooting
 
+**`jetski: no output produced — a tool required the "read_file" permission...`**
+
+The reviewer tried to open a file and agy auto-denied it, because a headless run cannot show a permission prompt. The denial discards the whole review, not just the tool call, so you get that one line where a report should be. The install is fine — `/gemini:setup` will not help.
+
+Fixed in `gemini` v0.2.2, which grants the read with `--add-dir`; upgrade if you are older. If it still appears, the diff pointed at something outside the repository — a sibling checkout, a path reached through `..`. `/gemini:review` retries once without file-lookup capability and says so; findings about code outside the diff then come back as "not verifiable from this diff" rather than checked.
+
 **Reviews come back as unstructured prose**
 
 The agent is not installed. `agy --agent <name>` **silently ignores names it does not recognise** — it returns a normal-looking answer with exit code 0 and no warning, so a failed install is invisible until you notice the output has no `## Verdict:` line. Re-run `/gemini:setup` and check that step 4 reports `agents : 3 processed`.
@@ -166,7 +172,7 @@ gemini-plugin-cc/
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). `gemini` is at 0.2.1, `gemini-images` at 0.2.0; re-run `/gemini:setup` after upgrading `gemini` — prompt changes don't reach agy on their own, though from 0.2.1 the plugin tells you when they have drifted.
+See [CHANGELOG.md](CHANGELOG.md). `gemini` is at 0.2.2, `gemini-images` at 0.2.0; re-run `/gemini:setup` after upgrading `gemini` — prompt changes don't reach agy on their own, though from 0.2.1 the plugin tells you when they have drifted. 0.2.2 is the exception: it changes no prompts, so there is nothing to reinstall.
 
 ## License
 
