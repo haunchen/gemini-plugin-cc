@@ -50,13 +50,13 @@ The system prompt lives in the `gemini-review` agent, installed by `/gemini:setu
 
 Assemble PAYLOAD (the variable the bash command below reads) from up to three sections.
 
-First get the repository root:
+First get the repository root and keep it as ROOT — both the payload and the `agy` invocation below need it:
 
 ```bash
-git rev-parse --show-toplevel 2>/dev/null
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 ```
 
-The agent's `view_file` only accepts absolute paths — agy does not run in this shell's working directory, so a repo-relative path resolves against the wrong root. Handing it the root is what lets it check a call site when it spots a nameable risk. If the command fails (not a git repo), omit the section entirely; the agent then reports such risks for the user to check instead of reading files.
+The agent's `view_file` only accepts absolute paths — agy does not run in this shell's working directory, so a repo-relative path resolves against the wrong root. Handing it the root is what lets it check a call site when it spots a nameable risk. If the command fails (not a git repo), ROOT is empty: omit the section entirely, and the agent then reports such risks for the user to check instead of reading files.
 
 PAYLOAD is the concatenation of whichever of these apply, in this order:
 
@@ -79,13 +79,27 @@ All `===` marker lines must be reproduced verbatim, including the parenthetical 
 Run the following bash command, passing PAYLOAD via stdin to avoid shell escaping issues:
 
 ```bash
-output=$(printf "%s" "$PAYLOAD" | agy --agent gemini-review --model $MODEL --print-timeout 5m 2>&1)
+output=$(printf "%s" "$PAYLOAD" | agy --agent gemini-review --model $MODEL --add-dir "$ROOT" --print-timeout 5m 2>&1)
 echo "$output"
 ```
 
+`--add-dir "$ROOT"` is what makes the agent's `view_file` usable. Without it a headless run cannot get the read permission approved and agy discards the whole review — see the error handling below. Omit the flag entirely when there is no repository root; there is nothing to grant, and the agent is already told it cannot read.
+
+The flag is not a formality. On a diff that renames an exported symbol, the same agent returns a LOW "callers may need updating, not verifiable from this diff" without it, and a HIGH naming the two files that actually import the old name with it.
+
 Note: We pipe input via stdin instead of -p to handle large diffs and special characters safely.
 
-If the output does not follow the review format (`## Review Summary` / `## Findings` / `## Verdict`), the agent is not installed — `--agent` silently ignores unknown names. Tell the user to run `/gemini:setup`.
+A run can come back without a review for two different reasons. They need different responses, and the wrong diagnosis sends the user somewhere useless.
+
+**A denied file read.** If the output says `no output produced` and names a permission (`read_file`), the agent tried to open something `--add-dir` did not cover: a headless run cannot show a permission prompt, and the denial throws away the entire review rather than just the tool call. Nothing is wrong with the install, so do not send the user to `/gemini:setup`.
+
+This should be rare once `--add-dir "$ROOT"` is passed. It still happens when the diff points outside the repository — a sibling checkout, a path reached through `..`, a file the agent decided to look up by absolute path.
+
+Re-run once with the `=== REPOSITORY ROOT ===` section removed from PAYLOAD, leaving REQUIREMENTS and CHANGE UNDER REVIEW untouched, and drop `--add-dir` with it. Without that section the agent knows it cannot open anything and reports such risks for the user to check instead, which completes normally. Say that the review ran without file-lookup capability, so any finding about code outside the diff is something to confirm rather than something Gemini verified — that downgrade is visible in the output, where verified call sites become "not verifiable from this diff".
+
+Whether the agent reaches outside at all depends on what it finds in the diff, so the same review can succeed one run and fail the next. Do not report this as flaky output.
+
+**An agent that never loaded.** If the output is a free-form review with no `## Verdict:` line, `--agent` silently ignored an unknown name. Tell the user to run `/gemini:setup`.
 
 ## Step 4: Present results
 
@@ -94,6 +108,7 @@ Show the Gemini response directly to the user. Do not modify, summarize, or refo
 ## Error handling
 
 - If `agy` command is not found: suggest running `/gemini:setup` first
+- If the output reports `no output produced` and a denied permission: follow the re-run without `=== REPOSITORY ROOT ===` described in Step 3. Do not send the user to `/gemini:setup` — the install is fine
 - If the command fails with an auth error: suggest running `agy` interactively to re-authenticate via Google OAuth
 - If the output reports a quota or rate-limit error (429, RESOURCE_EXHAUSTED, overloaded): show it as-is and suggest retrying later, or picking a different model with `--model` (`agy models` lists the slugs). There is no automatic fallback
 - If the command times out or returns an error: show the error message and suggest retrying

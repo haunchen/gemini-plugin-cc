@@ -43,7 +43,9 @@ echo "$output"
 
 Note: We pipe input via stdin instead of -p to handle large diffs and special characters safely.
 
-If the output does not follow the agent's expected structure, the agent is not installed — `--agent` silently ignores unknown names. Tell the user to run `/gemini:setup`.
+If the output says `no output produced` and names a denied permission (`read_file`), the agent tried to open a file and agy auto-denied it: a headless run cannot show a permission prompt, and the denial throws away the whole review. The install is fine — re-run, and note that whether the agent reaches for a file depends on what it finds in the diff, so this does not reproduce every time.
+
+If instead the output does not follow the agent's expected structure, the agent is not installed — `--agent` silently ignores unknown names. Tell the user to run `/gemini:setup`.
 
 ## Step 4: Present results
 

@@ -58,6 +58,7 @@ Show the Gemini response directly to the user. Do not modify, summarize, or refo
 ## Error handling
 
 - If `agy` command is not found: suggest running `/gemini:setup` first
+- If the output reports `no output produced` and a denied permission (`read_file`): the agent tried to open a file and agy auto-denied it, because a headless run cannot show a permission prompt — and the denial discards the whole answer. The install is fine, so do not send the user to `/gemini:setup`. Re-run after passing the file in as an argument, so its contents travel in the prompt and the agent has no reason to reach for the filesystem
 - If the command fails with an auth error: suggest running `agy` interactively to re-authenticate via Google OAuth
 - If the output reports a quota or rate-limit error (429, RESOURCE_EXHAUSTED, overloaded): show it as-is and suggest retrying later, or picking a different model with `--model` (`agy models` lists the slugs). There is no automatic fallback
 - If the command times out or returns an error: show the error message and suggest retrying

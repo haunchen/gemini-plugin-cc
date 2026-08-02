@@ -4,6 +4,34 @@ All notable changes to this project are documented here.
 
 Both plugins are versioned independently, but have moved together so far, so releases are tagged once for the repo (`v<version>`). See [CLAUDE.md](CLAUDE.md#versioning) for the bump rules.
 
+## [0.2.2] — 2026-08-02
+
+`gemini` only. The reviewer has been unable to open a file since agy started soft-denying permissions in headless mode, and the failure took the whole review with it. This release gives the capability back.
+
+### Upgrading
+
+Nothing to do. The agent prompts did not change, so `/gemini:setup` is not needed — and this is the first release where that is true. If a session-start notice says your prompts are stale, it is left over from 0.2.1.
+
+### Fixed
+
+- **`/gemini:review` can read files again.** agy runs `view_file` behind a permission named `read_file`, and a headless run cannot show a permission prompt, so agy soft-denies it. The denial does not fail just the tool call — it discards the entire turn, and the command gets back `jetski: no output produced — a tool required the "read_file" permission...` where a review should be. `/gemini:review` now passes `--add-dir "$ROOT"`, which grants the read without a global settings change.
+
+  Measured on agy 1.1.9 against a diff renaming an exported symbol: 2/2 runs denied without the flag, 2/2 completed with it. The difference in what comes back is not subtle — without file access the same agent returns one LOW finding saying callers "may need updating, not verifiable from this diff"; with it, a HIGH naming the two files that actually import the old name.
+
+  It is not deterministic, because whether the agent reaches for a file depends on what it finds in the diff. The same review could succeed one run and vanish the next, which is why this went unnoticed.
+
+- **The failure is no longer misdiagnosed as a broken install.** All three commands used to read "no `## Verdict:` line" as proof that `--agent` had ignored an unknown name, and sent the user to `/gemini:setup` — which fixes nothing here. They now tell the two cases apart. `/gemini:review` also re-runs once without the ROOT section when a read is denied anyway, which completes but downgrades the reviewer to reporting risks instead of checking them; the output says so.
+
+### Changed
+
+- **`agy/plugin.json` versions the agents, not the plugin.** It used to be documented as following its parent unconditionally. `check-agent-version.sh` compares exactly that file, so bumping it for a release the agents did not see tells people their prompts are stale when they are current — and a notice that cries wolf gets ignored on the session where it matters. It now moves only when an `agy/agents/*/agent.md` moves, which is why it stays at 0.2.1 here.
+
+### Not changed, and why
+
+An A/B run on this release's question — why a review of a data-migration script came back in three seconds with an empty `PASS` — tried adding a mandatory checklist to the reviewer, both inside the system prompt and appended after the diff. It made things worse: 0 findings across 5 runs with a checklist, against 2 across 4 without. The checklist gets the model to narrate what it checked and then treat the narration as the deliverable. Not shipped, and the reviewer prompt is unchanged here.
+
+Shortening that prompt is the hypothesis worth testing next, and this release deliberately does not attempt it. On the same payload and tool whitelist, a six-line prompt averaged 2.0 real findings per run against the shipped prompt's 0.78 — but it also invents things, and the rules that would be cut are the ones stopping that. `eval/` has no case that fails the reviewer for staying quiet, so there is nothing to measure the trade against yet. That comes first.
+
 ## [0.2.1] — 2026-07-31
 
 `/gemini:review` picks up four review disciplines ported from this repo's `dev` plugin `task-reviewer` agent, plus an optional way to hand it the requirements. The plugin also stops relying on you to remember that prompts need reinstalling.
