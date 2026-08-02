@@ -8,8 +8,8 @@ SCANS="${1:-3}"
 PAR="${2:-6}"
 MODEL="$AB_MODEL"
 ROOT="$AB_TARGET_ROOT"
-DIFF=../test-cases/migration-cli-entrypoint.diff
-OUT=out/fan
+DIFF="${AB_DIFF:-../test-cases/migration-cli-entrypoint.diff}"
+OUT="out/${AB_TAG:-fan}"
 rm -rf "$OUT"; mkdir -p "$OUT/claims" "$OUT/verdicts"
 
 SCAN_PAYLOAD="=== CHANGE UNDER REVIEW ===
@@ -51,9 +51,13 @@ while IFS= read -r line; do
     "$ROOT" "$loc" "$claim" > "$OUT/claims/$n.txt"
 done < "$OUT/candidates.txt"
 
+# 路徑經環境變數傳給子 shell。直接內插進 sh -c 字串會在路徑較長時
+# 撞到 xargs 的命令列長度上限，而且它的失敗是靜默的——查證一次都不會跑，
+# 結果看起來像「全部駁回」。
+export AGY_MODEL="$MODEL" AGY_ROOT="$ROOT" AGY_OUT="$OUT"
 seq 1 "$UNIQ" | xargs -P "$PAR" -I{} sh -c \
-  'agy --agent gemini-verify --model '"$MODEL"' --add-dir '"$ROOT"' --print-timeout 5m \
-     < '"$OUT"'/claims/{}.txt > '"$OUT"'/verdicts/{}.md 2>&1'
+  'agy --agent gemini-verify --model "$AGY_MODEL" --add-dir "$AGY_ROOT" --print-timeout 5m \
+     < "$AGY_OUT"/claims/{}.txt > "$AGY_OUT"/verdicts/{}.md 2>&1'
 
 verdict_of() {
   if grep -q "no output produced\|terminated due to error" "$1" 2>/dev/null; then echo DENIED
@@ -68,9 +72,10 @@ NCONF=$(echo "$CONF" | grep -c . || true)
 echo "[4/5] 對 ${NCONF} 條確認追加兩票"
 mkdir -p "$OUT/votes"
 for v in 2 3; do
+  AGY_V="$v" ; export AGY_V
   echo "$CONF" | grep . | xargs -P "$PAR" -I{} sh -c \
-    'agy --agent gemini-verify --model '"$MODEL"' --add-dir '"$ROOT"' --print-timeout 5m \
-       < '"$OUT"'/claims/{}.txt > '"$OUT"'/votes/{}-v'"$v"'.md 2>&1'
+    'agy --agent gemini-verify --model "$AGY_MODEL" --add-dir "$AGY_ROOT" --print-timeout 5m \
+       < "$AGY_OUT"/claims/{}.txt > "$AGY_OUT"/votes/{}-v"$AGY_V".md 2>&1'
 done
 
 # 回收 Adjacent：查證器駁回一條宣稱時，若認為程式碼另有問題，會用同樣的
@@ -94,15 +99,16 @@ if [ "$NADJ" -gt 0 ]; then
       "$ROOT" "$loc" "$claim" > "$OUT/claims2/$m.txt"
   done < "$OUT/round2.txt"
   seq 1 "$NADJ" | xargs -P "$PAR" -I{} sh -c \
-    'agy --agent gemini-verify --model '"$MODEL"' --add-dir '"$ROOT"' --print-timeout 5m \
-       < '"$OUT"'/claims2/{}.txt > '"$OUT"'/verdicts2/{}.md 2>&1'
+    'agy --agent gemini-verify --model "$AGY_MODEL" --add-dir "$AGY_ROOT" --print-timeout 5m \
+       < "$AGY_OUT"/claims2/{}.txt > "$AGY_OUT"/verdicts2/{}.md 2>&1'
   CONF2=$(for m in $(seq 1 "$NADJ"); do
     [ "$(verdict_of "$OUT/verdicts2/$m.md")" = CONFIRMED ] && echo "$m"; done)
   NCONF2=$(echo "$CONF2" | grep -c . || true)
   for v in 2 3; do
+    AGY_V="$v" ; export AGY_V
     echo "$CONF2" | grep . | xargs -P "$PAR" -I{} sh -c \
-      'agy --agent gemini-verify --model '"$MODEL"' --add-dir '"$ROOT"' --print-timeout 5m \
-         < '"$OUT"'/claims2/{}.txt > '"$OUT"'/votes2/{}-v'"$v"'.md 2>&1'
+      'agy --agent gemini-verify --model "$AGY_MODEL" --add-dir "$AGY_ROOT" --print-timeout 5m \
+         < "$AGY_OUT"/claims2/{}.txt > "$AGY_OUT"/votes2/{}-v"$AGY_V".md 2>&1'
   done
 else
   NCONF2=0
