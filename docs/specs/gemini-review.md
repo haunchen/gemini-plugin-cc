@@ -245,5 +245,34 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 
 ### D20: 先補漏報向的 eval 案例，再談縮短 prompt
 - **Decision**: 新增 `eval/test-cases/migration-cli-entrypoint.diff` 與 `promptfooconfig.yaml` 的 Test Case 14，其 rubric 同時罰漏報與罰虛構。在此案例存在前不改 `agent.md`
-- **Rationale**: 追查「review 在 3 秒內回空 PASS」的根因，實測（agy 1.1.9、`gemini-3.6-flash-high`、同一份 payload 與工具白名單）每次跑報出的真缺陷數：六行最小 prompt 2.0、現行 141 行 0.78、現行加強制檢查清單 0。單調且方向明確——prompt 講越多報越少。收窄 `agent.md:37` LOW 上限的適用範圍（單一變因）三次無效，故癥結是抑制型指令的總量而非某一條。但縮短不能直接做：既有 13 個案例中有 6 個專罰誤報，0 個罰漏報，那些抑制規則正是為了通過那 6 個而累積的。無檔案存取時模型確實會虛構——一次宣稱 `users.default_account` 有指向 `accounts(id)` 的外鍵並判 HIGH，而 schema 中該欄無 `REFERENCES`。兩種失效互為代價，缺少漏報向的錨點就無法判斷縮短是改善還是把誤報換回來。新案例實測現行 prompt 四次中一次，assertion 天生會抖，用途是對照而非門檻。另記一項條件差異：`run-agy.sh` 不帶 `--add-dir`，eval 一直在「讀不到任何檔案」的條件下評測，而 0.2.2 起 `/gemini:review` 會帶——虛構正是發生在讀不到檔時，故 eval 量到的漏報率是上界，非使用者實際體驗
+- **Rationale**: 追查「review 在 3 秒內回空 PASS」的根因，實測（agy 1.1.9、`gemini-3.6-flash-high`、同一份 payload 與工具白名單）每次跑報出的真缺陷數：六行最小 prompt 2.0、現行 141 行 0.78、現行加強制檢查清單 0。單調且方向明確——prompt 講越多報越少。收窄 `agent.md:37` LOW 上限的適用範圍（單一變因）三次無效，故癥結是抑制型指令的總量而非某一條（**此句已被 D21 推翻**）。但縮短不能直接做：既有 13 個案例中有 6 個專罰誤報，0 個罰漏報，那些抑制規則正是為了通過那 6 個而累積的。無檔案存取時模型確實會虛構——一次宣稱 `users.default_account` 有指向 `accounts(id)` 的外鍵並判 HIGH，而 schema 中該欄無 `REFERENCES`。兩種失效互為代價，缺少漏報向的錨點就無法判斷縮短是改善還是把誤報換回來。新案例實測現行 prompt 四次中一次，assertion 天生會抖，用途是對照而非門檻。另記一項條件差異：`run-agy.sh` 不帶 `--add-dir`，eval 一直在「讀不到任何檔案」的條件下評測，而 0.2.2 起 `/gemini:review` 會帶——虛構正是發生在讀不到檔時，故 eval 量到的漏報率是上界，非使用者實際體驗
+- **Date**: 2026-08-02
+
+### D21: 決定漏報的是 LOW 上限那一句的措辭，不是 prompt 長度
+- **Decision**: 推翻 D20「癥結是抑制型指令的總量」。改以 `agent.md:37` 的措辭為單一變因繼續調，暫不縮短 prompt。目前最佳臂（arm L，把上限的判準從「缺陷長在哪」改成「這個 finding 靠什麼成立」）尚未達到可出貨標準，不進 `plugins/`
+- **Rationale**: 做了長度 × 上限措辭的 2×2，每格 4 次跑，條件與 eval 一致（Test Case 14 的 diff、`gemini-3.6-flash-high`、不帶 `--add-dir`），判準為是否報出 CLI 進入點缺陷：
+
+  | | 未收窄上限 | 收窄上限 |
+  |---|---|---|
+  | 141 行 | 現行 4/8 | arm I **4/4** |
+  | 81 行 | arm K **1/4** | arm J **4/4** |
+
+  長度控制住之後沒有作用（I 4/4 = J 4/4；同為未收窄的現行 4/8 與 K 1/4 落差即噪音）。上限措辭則是 8/8 對 5/12，Fisher 精確檢定 p≈0.018。D20 說「收窄上限三次無效」是在另一份 payload 上用「真缺陷數」量的，換了判準後結論相反——單一變因的結論不能跨判準沿用。
+- **代價**: 收窄後模型把那條虛構的 `users.default_account → accounts(id)` 外鍵直接斷言為 MEDIUM/HIGH（I 4/4、J 3/4），未收窄版則壓成標明未查證的 LOW 或根本不提。arm L 把界線改畫在證據上（「這個 finding 需不需要一個你沒看到的事實」）後，偵測維持 4/4，外鍵回到有保留的 LOW 3/4，且六個罰誤報的案例 12/12 全乾淨——與現行 prompt 同分，無退步。但用 Test Case 14 完整 rubric 評分（每臂 4 次）是現行 2/4、arm L 1/4，兩種失效仍在互換，未構成勝出
+- **同時修正 Test Case 14 的 rubric**: 原條件 (2) 罰「宣稱 diff 沒顯示的外鍵」，judge 連明確標示「not verifiable from this diff」的 LOW 都判 FAIL。那正是 prompt 的 LOW 上限規則要求的行為，罰它等於把 prompt 推回沉默——恰是加這個案例要修的單向偏斜。改為只罰「當成既成事實」：斷言、評為 MEDIUM/HIGH、或讓它左右 verdict 才 FAIL，標明未查證的 LOW 明確視為通過。改後已驗證 judge 會據此放行
+- **Date**: 2026-08-02
+
+### D22: 不回退到 v0.2.0 的 prompt；移除規格審查是架構決定，不是品質手段
+- **Decision**: 保留 `agent.md` 現行的具名風險外查與 LOW 上限規則，不採用 v0.2.0 的「只報 diff 裡看得到的問題」硬規定。`--spec` 是否從 `/gemini:review` 拆出獨立 command 依 D21 的架構理由決定，但不得以「拆掉能提升審查品質」為由——實測不成立
+- **Rationale**: 兩支對照臂，條件同 D21（tc14 diff、`gemini-3.6-flash-high`、不帶 `--add-dir`）。
+
+  | 臂 | prompt | tc14 抓到 G4 | 虛構外鍵 | 誤報關卡 | snowflake 精度 |
+  |---|---|---|---|---|---|
+  | 現行 | 141 行 | 4/8 | 4/4 | 12/12 | 4/4 |
+  | M（現行減規格審查） | 124 行 | 3/4 | 2/4 | 11/12 | — |
+  | N（v0.2.0 原樣） | 79 行 | 3/4 | 0/4 | 12/12 | 1/4 |
+
+  arm M 為單一變因（只移除規格審查與其輸出區塊）。三項指標皆落在現行的噪音範圍內，換不到品質。其 app-rename 的一次退化經查為關卡判準過粗——它把 Dart 建構子未同步改名判為 HIGH，而 `BatteryMonitorApp` 配 `const BatteryGuardianApp({super.key})` 確實無法編譯，該 finding 是對的。
+
+  arm N 在虛構、誤報、偵測三項都不輸現行，長度只有一半，但在 snowflake-filter 上四次僅一次指出 `Number()` 對 17-19 位 ID 的精度問題，現行四次全中（Fisher p=0.029）。機制同源：v0.2.0 的「不得臆測未見程式碼」同時擋掉虛構的外鍵與 snowflake——後者需要推理執行期資料的形狀（Discord ID 的位數），那同樣不在 diff 內，該規則無法區分兩者。故其乾淨是以漏報買來的，不能靠調措辭只留一邊。虛構問題改由帶檔案存取的查證階段處理（實測 8 次 0 次），不必付這個代價
 - **Date**: 2026-08-02
