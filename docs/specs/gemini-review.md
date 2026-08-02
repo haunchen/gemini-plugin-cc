@@ -285,3 +285,13 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **成本**: 原型為 22 次呼叫；加上只對確認追票約 30 次。相對單次呼叫是一個數量級的增加，是否可接受尚未決定
 - **待解**: 語意去重（原型按 `file:line` 去重，同一個缺陷出現在 :139 與 :141 被驗兩次且結論相反）；嚴重度偏高（`devDependencies` 判 HIGH）；「輸出必須逐字回傳 Gemini」這條約束需重寫，目前的想法是查證階段也由 Gemini 寫、Claude 只做串接與去重
 - **Date**: 2026-08-02
+
+### D24: fan-out 在第二份 diff 上仍然成立，但樣本仍只有兩份
+- **Decision**: 繼續發展 fan-out 原型。`plugins/` 仍不動——泛化性只驗過兩份 diff，不足以支撐把正式 command 改成 27–33 次呼叫的架構
+- **Rationale**: 先前所有測量都集中在 `migration-cli-entrypoint.diff` 一份 diff 上，架構的優勢可能只是對這份素材過擬。換一份驗證：同一個來源 repo 的另一個子系統（REST route 的非同步化重構，3 檔 68 行），工作樹用 `git worktree` 釘在該 commit，避免查證器讀到後續被改過的程式碼
+- **結果**: 28 條候選 → 語意去重 17 條 → 確認 3 條，27 次呼叫。其中一條為真：DELETE 處理內兩個連續寫入未包在交易中（先 `UPDATE accounts SET is_active = 0`，再 `UPDATE users SET default_account = NULL`），第二個失敗則帳戶已停用而 `users.default_account` 仍指向它；上游的 `referenced` 檢查到更新之間亦未序列化。經人工讀原始碼確認，且該檔自該 commit 起未再變動。同一份 diff 交給現行 single-shot（同樣帶 `--add-dir`）跑兩次，兩次皆 PASS 零 finding
+- **旁證**: 該專案後續在 `reconcile` 與 `transactions` 兩處各自修掉同一類問題（讀改寫包進單一交易並鎖列），可見其團隊認定這是真缺陷；但 accounts route 未被涵蓋
+- **一致性**: 查證階段駁回 14/17，其中多數屬 `?` 佔位符那一類——與它在前一份 diff 上正確駁回的是同一類宣稱，行為未因換 repo 而漂移
+- **弱點**: 另兩條確認是測試檔內的 non-null assertion（LOW），實務上偏噪音。樣本仍只有兩份 diff、皆出自同一個 repo 與同一種語言棧
+- **一個值得記住的靜默失敗**: `run10.sh` 原本把路徑內插進 `xargs ... sh -c` 字串，路徑一長即超過命令列上限。它不會中止腳本，只是查證一次都不跑，而逐條輸出全為空 verdict——與「全部駁回」在畫面上無法區分，差點被讀成「乾淨 diff 守住了」。已改為經環境變數傳遞
+- **Date**: 2026-08-02
