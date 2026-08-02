@@ -237,3 +237,13 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Rationale**: agy 的 `view_file` 背後權限名為 `read_file`，headless 無法跳確認提示故一律 soft-deny，且該拒絕會丟掉整個 turn——command 拿回的是一行 `no output produced`，不是少一個 finding 的 review。D9 為此建立的整套 nameable-risk 查證規則因而全程失效。實測（agy 1.1.9，rename 已匯出符號的 diff）：不帶 flag 2/2 被拒，帶 flag 2/2 完成；輸出差異是「callers may need updating, not verifiable」的 LOW 對上指名兩個實際 import 檔的 HIGH。選 `--add-dir` 而非 `~/.gemini/settings.json` 的 `permissions.allow`：後者是每台機器的設定，無法隨 plugin 出貨，別人裝了照樣壞。不選 `--dangerously-skip-permissions`：既有約束禁止，且 `--add-dir` 已足夠。三個 command 的錯誤處理同步更正——原本把「輸出沒有 `## Verdict:`」一律讀成 agent 未安裝並導向 `/gemini:setup`，對本失敗模式是錯的指引。此失敗非確定性（是否讀檔取決於 diff 內容），這正是它長期未被發現的原因
 - **Date**: 2026-08-02
 
+### D19: 不在 reviewer prompt 加強制檢查清單
+- **Decision**: 維持 `agy/agents/gemini-review/agent.md` 原樣，不加「輸出 PASS 前必須列出檢查了哪些項目」的清單，system prompt 內與 diff 之後兩種放法都不採用
+- **Rationale**: 起因是一份搬遷腳本的 review 在 3 秒內回空 Findings + PASS。實測四臂（每臂 payload 相同，均為該腳本的兩個 commit）：帶清單 5 次跑出 0 個 finding，不帶清單 4 次跑出 2 個。清單會排擠 findings——模型把輸出預算花在敘述檢查過程，然後把敘述當成交付物；額外加的「不得在 Review Summary 內化解已陳述的失效情境」一條無效。此結果與 Google 對 Gemini 3.x 的指引一致：為舊模型設計的冗長 prompt 工程會導致 over-analyze，該指引要求 prompt 簡潔。樣本小（各臂 3 次、agy 無 sampling 控制），但方向一致且與官方指引同向。
+- **Correction (2026-08-02，同日)**: 本條原本另舉兩例，說模型「講出風險卻未列入 Findings」——一次是 TRUNCATE 沒有防呆、兩次是兩帳戶餘額互換可通過 SUM 驗證。這兩項後來查證為非缺陷，該處敘述已刪除：spec 明文要求「可重複執行（每次先清空目標表）」，防呆從未被要求；而資料是帶原 id、全欄位、單一 transaction 內直接複製，不存在能產生「SUM 相等但逐筆不等」的機制。模型當時的判斷是對的，是原計分基準錯了。詳見 D20
+- **Date**: 2026-08-02
+
+### D20: 先補漏報向的 eval 案例，再談縮短 prompt
+- **Decision**: 新增 `eval/test-cases/migration-cli-entrypoint.diff` 與 `promptfooconfig.yaml` 的 Test Case 14，其 rubric 同時罰漏報與罰虛構。在此案例存在前不改 `agent.md`
+- **Rationale**: 追查「review 在 3 秒內回空 PASS」的根因，實測（agy 1.1.9、`gemini-3.6-flash-high`、同一份 payload 與工具白名單）每次跑報出的真缺陷數：六行最小 prompt 2.0、現行 141 行 0.78、現行加強制檢查清單 0。單調且方向明確——prompt 講越多報越少。收窄 `agent.md:37` LOW 上限的適用範圍（單一變因）三次無效，故癥結是抑制型指令的總量而非某一條。但縮短不能直接做：既有 13 個案例中有 6 個專罰誤報，0 個罰漏報，那些抑制規則正是為了通過那 6 個而累積的。無檔案存取時模型確實會虛構——一次宣稱 `users.default_account` 有指向 `accounts(id)` 的外鍵並判 HIGH，而 schema 中該欄無 `REFERENCES`。兩種失效互為代價，缺少漏報向的錨點就無法判斷縮短是改善還是把誤報換回來。新案例實測現行 prompt 四次中一次，assertion 天生會抖，用途是對照而非門檻。另記一項條件差異：`run-agy.sh` 不帶 `--add-dir`，eval 一直在「讀不到任何檔案」的條件下評測，而 0.2.2 起 `/gemini:review` 會帶——虛構正是發生在讀不到檔時，故 eval 量到的漏報率是上界，非使用者實際體驗
+- **Date**: 2026-08-02

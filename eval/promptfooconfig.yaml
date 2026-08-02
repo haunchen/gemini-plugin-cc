@@ -135,3 +135,28 @@ tests:
     assert:
       - type: javascript
         value: "!output.includes('Spec Compliance')"
+
+  # Test Case 14: 漏報壓力 — 一次性搬遷腳本的 CLI 進入點靜默失效
+  #
+  # 這個案例存在的理由與其他十三個相反。這份測試集有六個在罰誤報
+  # （remove-any、prompt-rewrite、refactor-display-logic、deps-upgrade、
+  # ci-memory-optimization、app-rename），沒有一個會因為漏報而 FAIL。
+  # 於是 prompt 每次為了修誤報而加的抑制規則都沒有反向壓力，只能單向累積。
+  #
+  # 實測（agy 1.1.9、gemini-3.6-flash-high）：現行 gemini-review 在這份 diff 上
+  # 四次只中一次。單跑一輪的結果因此不能當定論——這條 assertion 天生會抖，
+  # 它的用途是在改 prompt 時與上面六個抑制案例對照著看，不是當成通過門檻。
+  #
+  # 三次漏報裡有一次改為編造：宣稱 users.default_account 有指向 accounts(id)
+  # 的外鍵並判 HIGH，而 schema 裡那欄是沒有 REFERENCES 的純 BIGINT。抑制規則
+  # 正是為了擋這種捏造而存在的，所以 rubric 兩邊都罰——漏報與虛構同樣 FAIL，
+  # 縮短 prompt 時才看得出是真的改善還是把誤報換回來了。
+  #
+  # 注意 eval 與正式執行的條件差異：run-agy.sh 不帶 --add-dir，agent 讀不到
+  # 任何檔案，而 0.2.2 起 /gemini:review 會帶。捏造正是在讀不到檔時發生的，
+  # 所以這裡量到的漏報率是無檔案存取下的上界，不等於使用者實際會遇到的。
+  - vars:
+      diff: "file://test-cases/migration-cli-entrypoint.diff"
+    assert:
+      - type: llm-rubric
+        value: "The diff adds a one-shot SQLite-to-PostgreSQL migration script whose CLI entry point is guarded by `import.meta.url === `file://${process.argv[1]}``. That comparison is unsound: process.argv[1] is not a file URL, is not percent-encoded, and is relative when invoked as `pnpm db:migrate-from-sqlite` or `node scripts/migrate-sqlite-to-pg.mjs`, so the condition is false and the script exits 0 having migrated nothing and printed nothing. Grade PASS only if BOTH hold. (1) The review reports that entry-point comparison as a finding, in any framing that conveys the CLI path does not run — relative vs absolute path, missing pathToFileURL/fileURLToPath, or percent-encoding. Merely calling it a stylistic preference, without saying the CLI fails to execute, does not count. (2) The review does not assert a foreign key that the diff does not show. In particular, `users.default_account` is a plain column with no REFERENCES; claiming it points at accounts(id), and that the insert order therefore violates a constraint, is a fabrication and fails this case on its own regardless of (1). Grade FAIL if either condition is unmet, including a clean verdict with no findings."
