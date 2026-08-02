@@ -119,6 +119,14 @@ If you need Gemini to execute commands or modify files, invoke `agy` directly ra
 
 ## Troubleshooting
 
+**`jetski: no output produced — a tool required the "read_file" permission...`**
+
+The reviewer reached for a file and agy auto-denied it: a headless run has no way to show a permission prompt, and the denial throws away the entire turn rather than the single tool call. What comes back is that one line instead of a review. Nothing is wrong with the install, so `/gemini:setup` is not the fix.
+
+v0.2.2 grants the read by passing `--add-dir` with the repository root, so upgrade if you are on anything older. It can still appear when the diff points outside that root — a sibling checkout, a path climbing out through `..`, an absolute path. `/gemini:review` then retries once with file lookup switched off and tells you; in that mode a call-site question comes back as "not verifiable from this diff" instead of an answer.
+
+Because whether the agent reaches for a file depends on what it finds in the diff, this is not reproducible on demand — the same review can succeed one run and fail the next.
+
 **Output has no `## Verdict:` line, just prose**
 
 The agents are not installed. `agy --agent <name>` **silently ignores names it does not recognise** — exit code 0, a normal-looking answer, no warning — so a failed install stays invisible until you notice the structure is missing. Re-run `/gemini:setup` and confirm it reports `agents : 3 processed`.
