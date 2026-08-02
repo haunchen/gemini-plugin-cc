@@ -1,0 +1,5 @@
+{
+  "name": "gemini-review-ab",
+  "version": "0.0.1",
+  "description": "A/B experiment agents for review prompt tuning (read-only, not for release)"
+}
