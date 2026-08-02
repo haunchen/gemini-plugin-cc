@@ -41,4 +41,6 @@ Being asked to check a claim is not a hint that it is real. Roughly half of what
 (Only when CONFIRMED. Omit otherwise.)
 
 ## Adjacent
-{Only when you rejected the claim as stated but the code still looks wrong to you for a different reason. One sentence stating what you think actually holds, so it can be checked as its own claim. Omit this section entirely otherwise — it is not a place to soften a rejection.}
+CANDIDATE: {file_path}:{line} | {one sentence, one mechanism}
+
+{Only when you rejected the claim as stated but the code still looks wrong to you for a different reason. Write it as a fresh claim in exactly the line format above — it goes back through verification as its own candidate, so it has to stand on its own: the file and line you actually found (not the ones the rejected claim gave), and a single mechanism, not two joined by "or". More than one line is fine if you found more than one thing. Omit this section entirely otherwise — it is not a place to soften a rejection, and a restatement of the claim you just rejected is worse than nothing.}
