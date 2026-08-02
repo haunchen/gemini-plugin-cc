@@ -79,11 +79,11 @@ All `===` marker lines must be reproduced verbatim, including the parenthetical 
 Run the following bash command, passing PAYLOAD via stdin to avoid shell escaping issues:
 
 ```bash
-output=$(printf "%s" "$PAYLOAD" | agy --agent gemini-review --model $MODEL --add-dir "$ROOT" --print-timeout 5m 2>&1)
+output=$(printf "%s" "$PAYLOAD" | agy --agent gemini-review --model $MODEL ${ROOT:+--add-dir "$ROOT"} --print-timeout 5m 2>&1)
 echo "$output"
 ```
 
-`--add-dir "$ROOT"` is what makes the agent's `view_file` usable. Without it a headless run cannot get the read permission approved and agy discards the whole review — see the error handling below. Omit the flag entirely when there is no repository root; there is nothing to grant, and the agent is already told it cannot read.
+`--add-dir "$ROOT"` is what makes the agent's `view_file` usable. Without it a headless run cannot get the read permission approved and agy discards the whole review — see the error handling below. The `${ROOT:+...}` expansion drops the flag when ROOT is empty, which is the same case that omits the `=== REPOSITORY ROOT ===` section: there is nothing to grant, and the agent is already told it cannot read. (agy does tolerate `--add-dir ""`, so this is about keeping the two halves of the decision in one place rather than avoiding a crash.)
 
 The flag is not a formality. On a diff that renames an exported symbol, the same agent returns a LOW "callers may need updating, not verifiable from this diff" without it, and a HIGH naming the two files that actually import the old name with it.
 
