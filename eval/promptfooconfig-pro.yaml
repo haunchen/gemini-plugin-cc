@@ -1,10 +1,15 @@
 description: "Review agent eval — Pro model comparison"
 
 providers:
-  - id: "exec: bash ./run-agy.sh - gemini-3.1-pro-high"
+  - id: file://agy-provider.js
     label: "agy-pro-default"
-  - id: "exec: bash ./run-agy.sh gemini-review gemini-3.1-pro-high"
+    config:
+      model: gemini-3.1-pro-high
+  - id: file://agy-provider.js
     label: "agy-pro-custom"
+    config:
+      agent: gemini-review
+      model: gemini-3.1-pro-high
 
 prompts:
   - "Review the following code diff for bugs, security issues, and code quality problems:\n\n{{diff}}"

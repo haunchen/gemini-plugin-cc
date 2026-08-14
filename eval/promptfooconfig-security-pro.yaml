@@ -1,10 +1,15 @@
 description: "Security-review agent eval (Pro) — PARKED: see promptfooconfig-security.yaml"
 
 providers:
-  - id: "exec: bash ./run-agy.sh - gemini-3.1-pro-high"
+  - id: file://agy-provider.js
     label: "agy-security-pro-default"
-  - id: "exec: bash ./run-agy.sh gemini-security-review gemini-3.1-pro-high"
+    config:
+      model: gemini-3.1-pro-high
+  - id: file://agy-provider.js
     label: "agy-security-pro-custom"
+    config:
+      agent: gemini-security-review
+      model: gemini-3.1-pro-high
 
 prompts:
   - "Perform a security review of the following code change. Identify any vulnerabilities:\n\n{{diff}}"

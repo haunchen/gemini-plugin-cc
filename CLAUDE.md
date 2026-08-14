@@ -154,13 +154,15 @@ The prompt's underspecification gate is worth reading before editing it. It list
 
 ### Eval suite
 
-`eval/` ships promptfoo configs comparing the custom agent against the bare model, both arms going through one runner: `run-agy.sh <agent|-> <model-slug>`, where `-` means no agent. Invoke the configs with `npx promptfoo@latest eval -c <config>`, not the runner directly. See `CONTRIBUTING.md` for the workflow.
+`eval/` ships promptfoo configs comparing the custom agent against the bare model. Both arms go through `agy-provider.js`, a promptfoo JS provider — each arm is `id: file://agy-provider.js` plus a `config:` block naming `model` and, for the custom arm, `agent` (omit `agent` for the bare model). Optional `addDir` and `timeout` map to the matching agy flags. Invoke with `npx promptfoo@latest eval -c <config>`.
+
+**Never pass the prompt as a shell argument.** The provider writes it to agy's stdin, and that is load-bearing rather than stylistic. The `exec: bash ./run-agy.sh …` providers this replaced put the prompt in argv, where the shell ate one level of backslash escaping: a test case containing `replace(/[.*+?^${}()|[\]\\]/g, "\\$&")` reached the model as `replace(/[.*+?^${}()|[\]\]/g, "\$&")`, which really is broken code. The model then reported an unterminated character class — reproducibly, on both 3.6 and 3.7, 6 runs out of 6 — and it reads exactly like a hallucination until you diff what the harness sent against the file on disk. Only cases with consecutive backslashes were affected, so it corrupted one row of the suite rather than failing loudly. `agy-provider.js` has the full account in its header comment.
 
 The two `promptfooconfig-security*.yaml` configs are PARKED — the command they target was removed (see D12). Their test cases and rubrics are kept for whenever it comes back.
 
 agy exposes no sampling controls, so eval runs vary more than the pre-0.2.0 numbers, which were pinned to `temperature: 0` via a `.gemini/settings.json` that no longer applies.
 
-**The suite does not reproduce how the command actually runs.** `run-agy.sh` passes no `--add-dir`, so the agent cannot open a single file, while `/gemini:review` has granted that since 0.2.2. The regime is not a detail: with no file access the reviewer has to guess about anything outside the diff, and with access it can check. Numbers from the suite describe the blind regime, not what a user sees.
+**The suite does not reproduce how the command actually runs.** No config sets `addDir`, so the agent cannot open a single file, while `/gemini:review` has granted that since 0.2.2. The regime is not a detail: with no file access the reviewer has to guess about anything outside the diff, and with access it can check. Numbers from the suite describe the blind regime, not what a user sees.
 
 Judge note: the rubric provider must be a current model. `claude-sonnet-4-20250514` is retired (404) and promptfoo ≤ 0.121.5 sends a deprecated `temperature` to newer models (400) — either failure grades every case FAIL regardless of output quality. Use promptfoo `@latest`.
 

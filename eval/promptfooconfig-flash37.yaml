@@ -1,12 +1,20 @@
 description: "Review agent eval — gemini 3.7 flash vs 3.6 flash (both with the custom agent), plus bare 3.7"
 
 providers:
-  - id: "exec: bash ./run-agy.sh gemini-review gemini-3.6-flash-high"
+  - id: file://agy-provider.js
     label: "3.6-flash-custom"
-  - id: "exec: bash ./run-agy.sh gemini-review gemini-3.7-flash-high"
+    config:
+      agent: gemini-review
+      model: gemini-3.6-flash-high
+  - id: file://agy-provider.js
     label: "3.7-flash-custom"
-  - id: "exec: bash ./run-agy.sh - gemini-3.7-flash-high"
+    config:
+      agent: gemini-review
+      model: gemini-3.7-flash-high
+  - id: file://agy-provider.js
     label: "3.7-flash-bare"
+    config:
+      model: gemini-3.7-flash-high
 
 prompts:
   - "Review the following code diff for bugs, security issues, and code quality problems:\n\n{{diff}}"

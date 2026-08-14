@@ -46,6 +46,28 @@ Replacing the adjective with five literal tests — behavior change with no stat
 
 `view_file` reading outside `--add-dir` is what makes this gate matter more than it looks: the failure mode is not a bad edit in one file, it is a confident agent acting on requirements it invented.
 
+### Fixed
+
+- **The eval harness was corrupting test cases containing backslashes.** Every config ran through `exec: bash ./run-agy.sh …`, which passed the prompt as a shell argument, and the shell ate one level of backslash escaping on the way. A test case containing
+
+  ```js
+  cmdName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  ```
+
+  reached the model as
+
+  ```js
+  cmdName.replace(/[.*+?^${}()|[\]\]/g, "\$&")
+  ```
+
+  which is genuinely broken. The model reported an unterminated character class and a replacement string that fails to prepend a backslash — correct findings about the text it was given, and indistinguishable from a hallucination until you compare what the harness sent against the file on disk. Both 3.6 and 3.7 produced it, 6 runs out of 6; feeding the same diff to agy directly, both said the code was correct.
+
+  Replaced with `eval/agy-provider.js`, a promptfoo JS provider that writes the prompt to agy's stdin, so nothing but flag values ever reaches a shell. `run-agy.sh` is deleted. Only cases with consecutive backslashes were affected — `incidental-findings` and `security-filename-injection` — which is why this survived several releases: it corrupts one or two rows instead of failing the run.
+
+- **Infrastructure failures no longer count as failed test cases.** agy reports a 503, an exhausted quota, or a headless permission denial on stdout with exit 0. The old runner handed those straight back as the model's answer, the rubric failed them for not containing a review, and an outage came out looking like a quality regression. Measured while writing this release: a 503 cost 3.7 a point on the hard set, and two permission denials cost the bare-3.7 arm two points on the main suite.
+
+  `agy-provider.js` now classifies those as provider errors, so promptfoo counts them in its error column instead of the pass rate. The loose tokens (`RESOURCE_EXHAUSTED`, `429`, `503`) are only trusted on short outputs, since a real review may well discuss retry handling in the code it is reviewing.
+
 ### Changed
 
 - **`/gemini:setup` installs and verifies four agents.** Expect `agents : 4 processed`. A new step 7 checks that `gemini-implement` has no shell (expects `NO_SHELL_OK`), since for that agent the read-only check does not apply and the absence of execution is the property worth confirming.

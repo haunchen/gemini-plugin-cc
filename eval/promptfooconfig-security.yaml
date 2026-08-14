@@ -1,10 +1,15 @@
 description: "Security-review agent eval — PARKED: the security-review command was removed in v0.2.0 because agy refuses security-audit requests (17/20 calls refused). Test cases and rubrics are kept for whenever the command comes back."
 
 providers:
-  - id: "exec: bash ./run-agy.sh - gemini-3.6-flash-high"
+  - id: file://agy-provider.js
     label: "agy-security-flash-default"
-  - id: "exec: bash ./run-agy.sh gemini-security-review gemini-3.6-flash-high"
+    config:
+      model: gemini-3.6-flash-high
+  - id: file://agy-provider.js
     label: "agy-security-flash-custom"
+    config:
+      agent: gemini-security-review
+      model: gemini-3.6-flash-high
 
 prompts:
   - "Perform a security review of the following code change. Identify any vulnerabilities:\n\n{{diff}}"

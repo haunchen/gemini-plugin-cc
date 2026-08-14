@@ -1,10 +1,15 @@
 description: "Review agent eval — custom system prompt vs bare model (flash)"
 
 providers:
-  - id: "exec: bash ./run-agy.sh - gemini-3.6-flash-high"
+  - id: file://agy-provider.js
     label: "agy-flash-default"
-  - id: "exec: bash ./run-agy.sh gemini-review gemini-3.6-flash-high"
+    config:
+      model: gemini-3.6-flash-high
+  - id: file://agy-provider.js
     label: "agy-flash-custom"
+    config:
+      agent: gemini-review
+      model: gemini-3.6-flash-high
 
 prompts:
   - "Review the following code diff for bugs, security issues, and code quality problems:\n\n{{diff}}"
