@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Claude Code plugin marketplace that reaches Gemini through the Antigravity CLI (`agy`). Two plugins share the same Google OAuth credentials:
 
-- **`gemini`** — slash commands for code review, ask, adversarial review. Pure Markdown commands + agent definitions, no JS runtime.
+- **`gemini`** — slash commands for code review, ask, adversarial review, and implementation. Pure Markdown commands + agent definitions, no JS runtime. Everything is read-only except `/gemini:implement`, which edits files.
 - **`gemini-images`** — PreToolUse hook that replaces image `Read` calls with Gemini-generated text descriptions, protecting Anthropic's prompt cache.
 
 Everything user-facing stays in Claude Code. `agy` is only the backend that runs Gemini — the plugins are not installed into agy as skills.
@@ -19,7 +19,7 @@ Marketplace registry at `/.claude-plugin/marketplace.json` points at two plugin 
 .claude-plugin/marketplace.json          # marketplace registry (2 plugins)
 plugins/gemini/
   .claude-plugin/plugin.json             # also registers the SessionStart hook
-  commands/                              # /gemini:setup, review, ask, adversarial-review
+  commands/                              # /gemini:setup, review, ask, adversarial-review, implement
   hooks/check-agent-version.sh           # warns when agy's agents drift from what the plugin ships
   agy/plugin.json                        # agy-side plugin — agents only, no commands
   agy/agents/<name>/agent.md             # system prompts, installed via `agy plugin install`
@@ -103,6 +103,30 @@ Change any of the three strings and you must change both sides in the same commi
 
 The old pro-by-default routing is gone: agy's Pro is `gemini-3.1-pro`, two generations behind 3.6 flash, and flash-high already scores 10/10 on the eval suite. `--model pro` still resolves to `gemini-3.1-pro-high` for explicit opt-in, and any other value passes through to agy unchanged (`agy models` lists the slugs).
 
+## How `/gemini:implement` Works
+
+The one command that writes. Same shape as review — labelled payload, agent decides by matching the labels literally — with three different markers:
+
+```
+=== WORKSPACE ROOT ===
+=== TASK BRIEF (what to implement) ===
+=== CONTEXT (files and conventions to follow) ===
+```
+
+Same rule as review's: the parentheticals are part of the string, and changing one means changing `commands/implement.md` and `agy/agents/gemini-implement/agent.md` in the same commit.
+
+Three things are load-bearing and specific to this command:
+
+- **It refuses to run outside a git repository.** Not a convenience check. `--add-dir` does not confine writes, so `git diff` is the only thing making the run reviewable and reversible. Without a repo there is no undo, so there is no run.
+- **It reconciles the report against reality.** The agent's `## Files Changed` list is a claim. The command diffs it against `git status --porcelain` taken before and after, and reports undeclared writes and declared-but-absent files separately. Undeclared writes are the case that matters — read that diff first.
+- **It never commits.** Uncommitted is what keeps `git checkout` available, and what keeps Gemini's edits distinguishable from the user's.
+
+The agent has no shell, so it cannot run the tests it writes. It is required to say so rather than report them passing, and the command repeats that when handing back: tests now exist, none has passed.
+
+The default model is `gemini-3.7-flash-high` while review stays on 3.6. That split is measured, not an oversight — see `docs/specs/gemini-implement.md` D6. Reviewing is where the two are indistinguishable; writing code is where 3.7's gains are.
+
+The prompt's underspecification gate is worth reading before editing it. It lists five literal conditions rather than saying "stop if ambiguous", because the adjective version demonstrably did not work: given "add caching so it is faster" the agent shipped an unbounded cache and reported `DONE`. See D5.
+
 ## How `gemini-images` Works
 
 `PreToolUse` hook fires on every `Read`. If the path matches an image extension, the hook resizes (magick → sips → skip), spawns agy to describe it, runs tesseract OCR in parallel, writes the combined output to a temp `desc.txt`, and rewrites `updatedInput.file_path` so Claude reads text instead of image bytes. Keeps the prompt cache warm.
@@ -121,6 +145,10 @@ The old pro-by-default routing is gone: agy's Pro is `gemini-3.1-pro`, two gener
 4. `/gemini:review` — review current git diff
 5. `/gemini:review path/to/file` — review specific file
 6. `bash plugins/gemini-images/scripts/doctor.sh` — verify gemini-images dependencies and agent install
+7. `/gemini:implement` — test in a throwaway git repo, never the working checkout. Three runs cover it:
+   - A fully specified task (states inputs, outputs, and any error message verbatim) — expect `Status: DONE`, files actually changed, and the `## Files Changed` list matching `git status` exactly
+   - An underspecified one, e.g. "add caching so it is faster" — expect `Status: NEEDS_CONTEXT` and **zero** files touched. If it implements something, the gate in the agent prompt has regressed; that is the check worth repeating after any edit to that prompt
+   - `agy -p "Run the shell command 'echo RAN'..." --agent gemini-implement` — expect `NO_SHELL_OK`
 
 **After editing any `agy/agents/*/agent.md`, re-run `agy plugin install` for that plugin.** Install copies the agents into `~/.gemini/config/plugins/`; without a re-install you keep exercising the old prompt, and `--agent` will not tell you.
 
@@ -169,7 +197,7 @@ Before tagging:
 
 1. **Bump the version** in the three files listed above, per the table.
 2. **Update `CHANGELOG.md`.** Lead with an *Upgrading* section whenever the release needs the user to do something — for this project that is almost always "re-run `/gemini:setup`", since prompts do not travel with a plugin upgrade.
-3. **Update `assets/banner.svg`** if the release changes anything the banner states: the version pill, the command list, the backend name, or the bottom spec row. The source of truth lives in the vault at `02-Projects/03-開發工具與基礎設施/gemini-plugin-cc/banner-gemini-plugin-cc.svg` — edit there, then copy into `assets/`, and keep the two byte-identical.
+3. **Update `assets/banner.svg`** if the release changes anything the banner states: the version pill, the command list, the backend name, or the bottom spec row. The source of truth lives in the vault at `20-Side/gemini-plugin-cc/banner-gemini-plugin-cc.svg` (it moved there when the vault was restructured; the old `02-Projects/…` path is gone) — edit there, then copy into `assets/`. The two differ in line endings only: the vault copy is LF, the repo copy CRLF, so sync with `sed 's/$/\r/'` rather than a plain `cp`, which would rewrite all 96 lines and bury the real change.
 4. **Re-run the eval** if any agent prompt changed, and put the numbers in the changelog. Claims about review quality should be measured, not asserted.
 5. **Check the docs still match.** README (setup steps, command table, troubleshooting), both plugin READMEs, `docs/specs/`, and this file. A removed command or renamed env var touches more places than feels reasonable.
 
@@ -190,5 +218,7 @@ Record decisions as `D<n>` entries in `docs/specs/`, including the ones that get
 - Zero-code core: no JS runtime for `gemini` plugin (only Markdown + bash). `gemini-images` uses a Node.js hook but stays self-contained.
 - Review output must be returned verbatim from Gemini — do not reformat or summarize.
 - Read-only is enforced by the `tools` whitelist in each agent's frontmatter (`view_file`, `find_by_name`), replacing the old `--admin-policy readonly.toml`. This is strictly stronger: the tools are absent from the agent rather than denied, so even `--dangerously-skip-permissions` cannot write files or run shell commands. Verified by `/gemini:setup` step 6.
-- Never add `--dangerously-skip-permissions` to a plugin invocation. The whitelist holds without it, and the flag would only matter for tools the agents should not have.
+- **`gemini-implement` is the one exception, and it is scoped rather than a loosening.** It adds `replace_file_content` and `write_to_file` and nothing else — still no shell, verified separately by `/gemini:setup` step 7 (`NO_SHELL_OK`). The other three agents are untouched, so `/gemini:review` remains something that cannot alter your files. See `docs/specs/gemini-implement.md` D1.
+- **The whitelist bounds what an agent can do, not where.** `--add-dir` sets the workspace; it does not fence it. Measured: the implementer wrote an absolute path outside `--add-dir` with nothing blocking or warning, and `view_file` read a file well outside it. That second half applies to the read-only agents too — they cannot write anywhere, but they can read anything the user can. `/gemini:review` staying inside the repo root is its prompt behaving, not a boundary holding. `/gemini:implement` compensates by refusing to run outside a git repo and reconciling declared writes against `git status`; a write outside the repo root is invisible to that check and nothing prevents one.
+- Never add `--dangerously-skip-permissions` to a plugin invocation. The whitelist holds without it — including for the write tools, which work headless with no permission prompt — and the flag would only matter for tools the agents should not have.
 - Specs live in `docs/specs/`, design docs in `docs/plans/`.

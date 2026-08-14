@@ -1,0 +1,30 @@
+diff --git a/src/thumbs/generate.ts b/src/thumbs/generate.ts
+index 5d0c1a2..9e7b4f3 100644
+--- a/src/thumbs/generate.ts
++++ b/src/thumbs/generate.ts
+@@ -14,13 +14,15 @@ export async function generateThumbnails(
+   assets: Asset[],
+   opts: ThumbOptions,
+ ): Promise<ThumbResult[]> {
+-  const results: ThumbResult[] = [];
+-
+-  for (const asset of assets) {
+-    results.push(await renderOne(asset, opts));
+-  }
+-
+-  return results;
++  // Each render reads one asset and writes to its own output path, so the
++  // work is independent. Bound the fan-out so we do not exhaust file handles.
++  const limit = pLimit(opts.concurrency ?? 4);
++
++  return Promise.all(
++    assets.map((asset) => limit(() => renderOne(asset, opts))),
++  );
+ }
+
+ async function renderOne(asset: Asset, opts: ThumbOptions): Promise<ThumbResult> {
+   const buf = await readFile(asset.sourcePath);
+   const resized = await sharp(buf).resize(opts.width, opts.height).toBuffer();
+   await writeFile(asset.thumbPath, resized);
+   return { assetId: asset.id, path: asset.thumbPath, bytes: resized.length };
+ }

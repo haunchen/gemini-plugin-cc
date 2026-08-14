@@ -6,8 +6,8 @@
   "plugins": [
     {
       "name": "gemini",
-      "description": "Gemini via Antigravity CLI — ask, review, adversarial-review",
-      "version": "0.2.2",
+      "description": "Gemini via Antigravity CLI — ask, review, adversarial-review, implement",
+      "version": "0.3.0",
       "author": {
         "name": "Frank Chen"
       },

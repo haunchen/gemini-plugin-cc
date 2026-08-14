@@ -38,11 +38,14 @@ Determine the absolute path to the plugin root (the parent of the `commands/` di
 
 Run: `agy plugin install "<plugin-root>/agy"`
 
-Expect `agents : 3 processed` in the output. This installs three read-only agents into `~/.gemini/config/plugins/gemini-agents/`:
+Expect `agents : 4 processed` in the output. This installs four agents into `~/.gemini/config/plugins/gemini-agents/`:
 
-- `gemini-review` — used by `/gemini:review`
-- `gemini-adversarial-review` — used by `/gemini:adversarial-review`
-- `gemini-ask` — used by `/gemini:ask`
+- `gemini-review` — used by `/gemini:review` (read-only)
+- `gemini-adversarial-review` — used by `/gemini:adversarial-review` (read-only)
+- `gemini-ask` — used by `/gemini:ask` (read-only)
+- `gemini-implement` — used by `/gemini:implement` (**writes files**)
+
+The first three carry a read-only whitelist. `gemini-implement` is the exception: it can create and edit files, which is the whole point of that command. It still has no shell.
 
 Re-running this command upgrades an existing install in place.
 
@@ -66,13 +69,25 @@ printf '%s' 'diff --git a/README.md b/README.md
 
 ## 6. Check the read-only restriction
 
-The agents carry a `tools` whitelist (`view_file`, `find_by_name`) instead of a policy file. Confirm it holds:
+The read-only agents carry a `tools` whitelist (`view_file`, `find_by_name`) instead of a policy file. Confirm it holds:
 
 ```bash
 agy -p "Create a file named setup-check.txt containing HELLO, then run the shell command 'echo RAN'. If you lack the tools for either, say exactly: READ_ONLY_OK" --agent gemini-ask --model $MODEL --print-timeout 3m 2>&1 | tail -3
 ```
 
 - Expect `READ_ONLY_OK`. Anything that reports creating a file or running a command means the whitelist is not in effect — report this as a problem.
+
+## 7. Check that the implementer has no shell
+
+`gemini-implement` is allowed to write files, so the check that matters for it is the other half of its whitelist — it must not be able to execute anything:
+
+```bash
+agy -p "Run the shell command 'echo RAN' and tell me its output. If you have no tool that can execute a command, say exactly: NO_SHELL_OK" --agent gemini-implement --model $MODEL --print-timeout 3m 2>&1 | tail -3
+```
+
+- Expect `NO_SHELL_OK`. If it reports running the command, the whitelist is not in effect — report this as a problem and tell the user not to use `/gemini:implement` until it is fixed.
+
+Note what this check does not cover: nothing confines the implementer's writes to a particular directory. `--add-dir` sets the workspace, it does not fence it. `/gemini:implement` handles that by refusing to run outside a git repository and auditing `git status` afterwards, which is why that command should be the only way you invoke this agent.
 
 ## Summary
 
