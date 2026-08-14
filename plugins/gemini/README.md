@@ -79,8 +79,28 @@ Free-form prose with no such headings means the agents are not installed. See [T
 | `/gemini:review [path] [--spec <path>] [--model <m>]` | Code review of `git diff HEAD`, or of a file / glob you name. `--spec` adds a spec-compliance verdict |
 | `/gemini:ask <question> [file] [--model <m>]` | Free-form technical question, optionally with a file as context |
 | `/gemini:adversarial-review [path] [--model <m>]` | Devil's advocate — challenges design decisions instead of hunting bugs |
+| `/gemini:implement <task> [--brief <path>] [--context <path>] [--model <m>]` | **Writes to your files.** Hands a task to Gemini, which edits the workspace directly |
 
 `review` and `adversarial-review` fall back to `git diff HEAD` (then `--cached`) when you give no path.
+
+### Implementing, not just reviewing
+
+`/gemini:implement` is the only command that changes your files. It suits mechanical, well-specified work that is cheap to check — batch renames, boilerplate, test scaffolding, applying one pattern across several files. Work that needs judgment about the whole repo is better done in the Claude Code session that already has the context.
+
+```
+/gemini:implement Add a truncate(input, maxLength) helper to src/format.ts with tests
+/gemini:implement --brief docs/tasks/T3.md --context src/format.ts
+```
+
+What it does around the edit:
+
+- Refuses to run outside a git repository, and tells you if the tree is already dirty before starting
+- Afterwards, checks what the agent *said* it changed against what `git status` shows — undeclared writes are called out, because those are the ones you would otherwise miss
+- Never commits, so `git diff` reviews it and `git checkout` undoes it
+
+Two things it will not do. It has no shell, so tests it writes have never run — you get the exact command to run them, and it is required to say they are unrun rather than claim they pass. And when the brief leaves a real decision open (state with no bound, a goal that is only "faster", more than one plausible file), it writes nothing and comes back with `NEEDS_CONTEXT` plus the decisions it needs from you.
+
+Default model is 3.7 Flash here, against 3.6 for review. The two are indistinguishable at reviewing on this repo's eval suite; 3.7's measured gains are in writing code.
 
 ### Reviewing against requirements
 
@@ -166,4 +186,6 @@ agy plugin uninstall gemini-agents
 - **No security-review command.** It existed up to v0.1.0. agy refuses security-audit requests — 17 of 20 eval calls came back as a refusal, including one on a pure rename diff with nothing to find — so the command could not do its job. The same prompt scored 10/10 under Gemini CLI, and rewriting it into a defensive framing did not help. Test cases and rubrics are kept in `eval/` for whenever this changes.
 - **Setup is stateful.** Prompts live in agy, not in the plugin, so a plugin upgrade alone does not update them; re-run `/gemini:setup`.
 - **No sampling control.** agy exposes no temperature or top-p setting, so repeated runs on the same input vary more than they did under Gemini CLI, which this repo pinned to `temperature: 0`.
-- **Read-only by design.** The agents cannot run commands, write files, or fetch URLs, so they review only what is in the input you give them plus files they can read locally.
+- **Read-only by design, except the implementer.** `gemini-review`, `gemini-ask` and `gemini-adversarial-review` cannot run commands, write files, or fetch URLs — they work from the input you give them plus files they can read locally. `gemini-implement` adds file editing and nothing else; it still has no shell and no network.
+- **No shell anywhere.** Nothing in this plugin can execute a command, which is why `/gemini:implement` writes tests it cannot run.
+- **The workspace flag is not a fence.** `--add-dir` says where the work is, not where writes are allowed — a run can touch paths outside it, and reads are unrestricted for every agent including the read-only ones. `/gemini:implement` handles this by requiring a git repo and auditing `git status` afterwards, which covers everything inside the repository and nothing outside it.

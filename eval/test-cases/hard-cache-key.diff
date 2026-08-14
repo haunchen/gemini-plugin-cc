@@ -1,0 +1,35 @@
+diff --git a/src/pricing/quote.ts b/src/pricing/quote.ts
+index 7c1e4a9..b2f88d1 100644
+--- a/src/pricing/quote.ts
++++ b/src/pricing/quote.ts
+@@ -1,6 +1,9 @@
+ import { getRateTable } from "../rates";
+ import { applyDiscounts } from "./discounts";
+
++// Quote lookups dominate the checkout path — the same customer hits this
++// endpoint several times while adjusting quantities. Cache per customer.
++const quoteCache = new Map<string, Quote>();
++
+ export interface QuoteInput {
+   customerId: string;
+   sku: string;
+@@ -9,12 +12,20 @@ export interface QuoteInput {
+   currency: string;
+ }
+
+ export async function buildQuote(input: QuoteInput): Promise<Quote> {
++  const cached = quoteCache.get(input.customerId);
++  if (cached) {
++    return cached;
++  }
++
+   const rates = await getRateTable(input.currency);
+   const unit = rates.lookup(input.sku);
+   const subtotal = unit * input.quantity;
+   const total = applyDiscounts(subtotal, input.customerId, input.quantity);
+
+-  return { sku: input.sku, currency: input.currency, unit, subtotal, total };
++  const quote = { sku: input.sku, currency: input.currency, unit, subtotal, total };
++  quoteCache.set(input.customerId, quote);
++  return quote;
+ }

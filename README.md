@@ -26,7 +26,7 @@ A marketplace of [Claude Code plugins](https://docs.anthropic.com/en/docs/claude
 
 | Plugin | Purpose | Triggers |
 |--------|---------|----------|
-| [`gemini`](plugins/gemini/) | Slash commands for code review, ask, adversarial review | `/gemini:*` |
+| [`gemini`](plugins/gemini/) | Slash commands for code review, ask, adversarial review, implementation | `/gemini:*` |
 | [`gemini-images`](plugins/gemini-images/) | PreToolUse hook that converts image Reads into text descriptions to protect prompt cache | Automatic on `Read` image files |
 
 Both plugins share the same agy OAuth credentials. Install one or both.
@@ -124,14 +124,22 @@ Run `agy` interactively once to refresh the OAuth token — `-p` (print) mode do
 - `/gemini:review [path] [--spec <path>] [--model <m>]` — code review (default model: 3.6 Flash, high effort). `--spec` adds a spec-compliance verdict
 - `/gemini:ask <question> [file] [--model <m>]` — free-form technical question
 - `/gemini:adversarial-review [path] [--model <m>]` — devil's advocate design challenge
+- `/gemini:implement <task> [--brief <path>] [--context <path>] [--model <m>]` — **writes to your files**. Default model: 3.7 Flash, high effort
 
 > A `/gemini:security-review` command existed up to v0.1.0. It was removed in v0.2.0: agy declines security-audit requests (17 of 20 eval calls came back as "Sorry, I cannot fulfill your request to analyze or identify vulnerabilities"), even on a clean rename diff, so the command could not do its job. `/gemini:review` still flags security defects — it caught a SQL injection as `[HIGH]` on the same test case that the security command was refused on.
 
 ## Security
 
-Each agent carries a `tools` whitelist in its frontmatter — only `view_file` and `find_by_name`. Writing files, running shell commands, web access and MCP tools are not in the agent's toolset at all, so there is nothing to bypass: the restriction holds even under `--dangerously-skip-permissions`. `/gemini:setup` verifies this on every run.
+Each agent carries a `tools` whitelist in its frontmatter. For `gemini-review`, `gemini-ask` and `gemini-adversarial-review` it is `view_file` and `find_by_name` only — writing files, running shell commands, web access and MCP tools are absent from the toolset entirely, so there is nothing to bypass: the restriction holds even under `--dangerously-skip-permissions`. `/gemini:setup` verifies it on every run.
 
-This keeps the review / ask / adversarial-review commands focused on inspection. If you need Gemini to execute shell commands or modify files, invoke `agy` directly instead of going through this plugin.
+`gemini-implement` is the exception, and the reason it is a separate agent: it adds `replace_file_content` and `write_to_file`, because editing files is the job. It still has no shell — `/gemini:setup` step 7 confirms that specifically — so it cannot run tests, install packages, or reach the network. Tests it writes have never been executed, and it is required to say so rather than report them passing.
+
+Two limits are worth knowing before using `/gemini:implement`:
+
+- **`--add-dir` sets the workspace; it does not fence it.** Nothing in agy stops a write outside that path. `/gemini:implement` compensates by refusing to run outside a git repository, then reconciling the agent's declared file list against what `git status` actually shows — including files it changed without declaring. A write outside the repository root would not appear there, and nothing prevents one.
+- **Read scope is unbounded for every agent, including the read-only ones.** The whitelist guarantees they cannot write; it says nothing about where they can read. In practice a review stays inside the repository root because its prompt tells it to, which is a behavioral constraint rather than a boundary.
+
+Nothing commits. Leaving changes in the working tree is what keeps `git diff` and `git checkout` available as the review and undo path.
 
 ## Uninstall
 

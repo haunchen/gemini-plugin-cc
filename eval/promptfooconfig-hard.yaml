@@ -1,0 +1,52 @@
+description: "Hard set — 3.6 vs 3.7 flash (custom agent), reasoning-heavy diffs"
+
+providers:
+  - id: file://agy-provider.js
+    label: "3.6-flash-custom"
+    config:
+      agent: gemini-review
+      model: gemini-3.6-flash-high
+  - id: file://agy-provider.js
+    label: "3.7-flash-custom"
+    config:
+      agent: gemini-review
+      model: gemini-3.7-flash-high
+
+prompts:
+  - "Review the following code diff for bugs, security issues, and code quality problems:\n\n{{diff}}"
+
+defaultTest:
+  options:
+    provider:
+      id: anthropic:messages:claude-sonnet-5
+      config:
+        apiKeyRequired: false
+
+tests:
+  # H1 concurrency: Promise.all defeats the in-flight dedup guard
+  - vars:
+      diff: "file://test-cases/hard-parallel-race.diff"
+    assert:
+      - type: llm-rubric
+        value: "The diff replaces a sequential import loop with Promise.all. The defect: importRow guards duplicates via this.seen and an awaited findByEmail check, but under Promise.all every row runs its check before any seen.add or insert completes, so duplicate emails in the same batch all pass the guard and get inserted, and this.skipped undercounts. Grade PASS if the review identifies that the concurrency change breaks the duplicate guard (a race / TOCTOU between the check and the insert, or seen being populated too late to be seen by siblings). Grade FAIL if it only praises the performance win, only raises generic concerns (unbounded concurrency, error handling, DB load) without the dedup breakage, or misses it entirely."
+
+  # H2 caching: key omits the inputs the value depends on
+  - vars:
+      diff: "file://test-cases/hard-cache-key.diff"
+    assert:
+      - type: llm-rubric
+        value: "The diff adds a module-level Map cache to buildQuote keyed only on input.customerId, while the returned quote depends on sku, quantity, and currency as well. The defect: the same customer requesting a different SKU, quantity, or currency gets back the previously cached quote — wrong prices served. Grade PASS if the review identifies that the cache key is missing dimensions the value depends on (any of sku/quantity/currency). Secondary observations (no TTL, unbounded growth, stale rate table, not safe across processes) are fine as extras. Grade FAIL if the review only raises TTL/unbounded-growth/staleness without the wrong-key defect, or misses it entirely."
+
+  # H3 lock: early returns added above the try, so finally never runs
+  - vars:
+      diff: "file://test-cases/hard-lock-early-return.diff"
+    assert:
+      - type: llm-rubric
+        value: "The diff adds two early returns (cancelled status, attempts exhausted) between lock acquisition and the try block whose finally releases the lock. The defect: those returns bypass the finally, so the lock is never released and that job_id is deadlocked for subsequent runs. Grade PASS if the review identifies the leaked/never-released lock caused by returning before the try. Grade FAIL if the review approves the change, only comments on logging or status semantics, or misses the lock leak."
+
+  # H4 negative control: parallelism that is genuinely safe
+  - vars:
+      diff: "file://test-cases/hard-safe-parallel.diff"
+    assert:
+      - type: llm-rubric
+        value: "This diff parallelizes thumbnail generation with a bounded pLimit. Each renderOne reads its own asset.sourcePath and writes its own asset.thumbPath with no shared mutable state, so the change is safe, and Promise.all preserves input order in the returned array. Grade FAIL if the review claims a race condition, data corruption, shared-state hazard, lost results, out-of-order results, or says a mutex/sequential execution is needed — those are false positives. Grade PASS otherwise; noting that pLimit needs an import, that opts.concurrency should be validated, that memory use rises with concurrency, or that one rejection fails the whole batch are all legitimate observations that do not cause a FAIL."

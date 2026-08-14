@@ -15,21 +15,24 @@
   <rect x="1040" y="64" width="176" height="36" rx="4" fill="#212a37" stroke="#4f5b62" stroke-width="1"/>
   <circle cx="1062" cy="82" r="4" fill="#22c55e"/>
   <text x="1078" y="88" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="14" fill="#94A3B8">
-    v0.2.2 &#183; agy
+    v0.3.0 &#183; agy
   </text>
 
   <!-- 流程節點區 (y=380 中軸) -->
 
   <!-- 節點 1：Claude Code -->
   <rect x="80" y="320" width="300" height="120" rx="4" fill="#212a37" stroke="#4f5b62" stroke-width="1"/>
-  <text x="230" y="365" text-anchor="middle" font-family="'Inter', 'Noto Sans TC', system-ui, sans-serif" font-size="20" font-weight="600" fill="#E2E8F0">
+  <text x="230" y="362" text-anchor="middle" font-family="'Inter', 'Noto Sans TC', system-ui, sans-serif" font-size="20" font-weight="600" fill="#E2E8F0">
     Claude Code
   </text>
-  <text x="230" y="395" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="14" fill="#94A3B8">
+  <text x="230" y="390" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="13" fill="#94A3B8">
     /gemini:review
   </text>
-  <text x="230" y="417" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="14" fill="#94A3B8">
+  <text x="230" y="408" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="13" fill="#94A3B8">
     /gemini:adversarial-review
+  </text>
+  <text x="230" y="426" text-anchor="middle" font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="13" fill="#fb923c">
+    /gemini:implement
   </text>
 
   <!-- 箭頭 1 -->
@@ -51,7 +54,7 @@
     custom agent.md
   </text>
   <text x="640" y="432" text-anchor="middle" font-family="'Inter', system-ui, sans-serif" font-size="13" fill="#64748B">
-    3.6 flash &#183; effort high
+    3.6 / 3.7 flash &#183; effort high
   </text>
 
   <!-- 箭頭 2 -->
@@ -81,11 +84,11 @@
 
   <g font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="14" fill="#94A3B8">
     <text x="80" y="540">
-      <tspan fill="#64748B">commands:</tspan> review &#183; ask &#183; adversarial-review &#183; setup
+      <tspan fill="#64748B">commands:</tspan> review &#183; ask &#183; adversarial-review &#183; implement &#183; setup
     </text>
     <text x="80" y="568">
       <tspan fill="#64748B">auth:</tspan> Google OAuth
-      <tspan fill="#64748B" dx="24">tools:</tspan> view_file &#183; find_by_name (agent allowlist)
+      <tspan fill="#64748B" dx="24">tools:</tspan> read-only allowlist &#183; file writes for implement
     </text>
   </g>
 

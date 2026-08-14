@@ -4,6 +4,89 @@ All notable changes to this project are documented here.
 
 Both plugins are versioned independently, but have moved together so far, so releases are tagged once for the repo (`v<version>`). See [CLAUDE.md](CLAUDE.md#versioning) for the bump rules.
 
+## [0.3.0] — 2026-08-14
+
+`gemini` only. The plugin gets a command that writes to your files. Everything before this release only ever read them, and that line is worth crossing deliberately rather than quietly.
+
+### Upgrading
+
+**Re-run `/gemini:setup`.** This release adds a fourth agent, and agents do not travel with a plugin upgrade — `agy --agent` will keep answering with the three you already have and never mention the missing one. `/gemini:implement` cannot work until setup has run.
+
+### Added
+
+- **`/gemini:implement <task>`.** Hands a task to Gemini, which edits the files directly. Takes `--brief <path>` for a requirements file, `--context <path>` (repeatable, glob-aware) for supporting material, and `--model`. Defaults to `gemini-3.7-flash-high`.
+
+  It is for work that is mechanical, well-specified, and cheap to verify — batch renames, boilerplate, test scaffolding, one pattern applied across several files. Work needing whole-repo judgment is better done in the Claude Code session that already holds the context.
+
+- **The `gemini-implement` agent.** Whitelist is `view_file`, `find_by_name`, `replace_file_content`, `write_to_file` — file editing, no shell. Its disciplines are ported from this repo's `dev` plugin `implementer` agent: scope discipline, read-before-edit, follow the surrounding conventions, self-review checklist, and a four-value status (`DONE` / `DONE_WITH_CONCERNS` / `BLOCKED` / `NEEDS_CONTEXT`).
+
+  Three things had to change in the port, all because agy is headless and one-shot. The original can pause and ask its controller a question; this one cannot, so every question becomes a `NEEDS_CONTEXT` report that ends the run. The original runs tests and commits; this one has no shell, so it writes tests it has never executed and is required to say so rather than report them passing. The original is dispatched by a controller that already resolved brief ambiguities; this one gets whatever the user typed.
+
+### The default model is 3.7 here and 3.6 in `/gemini:review`
+
+Deliberate, and measured on the fixed harness — two full runs of the 12-case suite, with provider errors (agy 503s, headless permission denials) and judge parse failures excluded rather than counted as losses:
+
+| | run 1 | run 2 | total |
+|---|---|---|---|
+| 3.6 + agent | 10/11 | 11/12 | **21/23** |
+| 3.7 + agent | 11/11 | 10/11 | **21/22** |
+| 3.7 bare | 4/10 | 6/10 | 10/20 |
+
+The cases each one dropped were different every run — 3.6 lost `snowflake-filter` in the first and `security-filename-injection` in the second; 3.7 lost `snowflake-filter` only in the second. That pattern is sampling variance, not a capability gap, which is what you would expect given agy exposes no sampling controls.
+
+On four new reasoning-heavy cases written for this release — a `Promise.all` that defeats a dedup guard, a cache key missing the dimensions its value depends on, early returns that skip the `finally` releasing a lock, plus a negative control of genuinely safe parallelism — 4/4 each, zero errors, and neither flagged the control.
+
+A pairwise comparison across 16 cases in both orderings, judged by Claude Sonnet 4.6, split 5:2 in decisive cases. At that sample size, under a coin-flip null, a split that lopsided or worse turns up about 45% of the time.
+
+None of that is a signal, and that is the whole basis for leaving review on 3.6: no measurable improvement, no reason to change what people already rely on. What remains is Google's own figure for where 3.7 gained — writing code (DeepSWE v1.1 49.0% → 65.3%) — which is this command's job and not review's.
+
+The bare-model column is the one that moved, and it is the argument for the agent prompts existing at all: unprompted 3.7 escalates a prompt rewrite to a prompt-injection vulnerability, a CI memory flag to a security issue, and a routine dependency bump to substantial risk.
+
+### What was measured about writing files
+
+- **A whitelisted write tool works headless.** No permission prompt, no `--dangerously-skip-permissions`, no `permissions.allow` entry. This is the opposite of `view_file`, whose `read_file` permission is soft-denied in headless mode and takes the whole turn with it (see 0.2.2).
+- **`--mode accept-edits` is not available.** Two runs, both `Eligibility check failed: UNAVAILABLE (503)`; the identical request without the flag executed normally. It is the flag, not the service.
+- **`--add-dir` is not a sandbox.** Asked to write an absolute path outside the workspace, the agent did, with nothing blocking or warning. The same is true for reads: `view_file` opened a file well outside `--add-dir` and returned its contents.
+
+  That last one applies to the read-only agents already shipping. The `tools` whitelist guarantees they cannot *write*; it says nothing about *where they can read*. A `/gemini:review` run can open any file the user can. It does not go looking — the reviewer's own prompt keeps it inside the repository root — but that is a behavioral constraint, not a boundary, and it should not be mistaken for one.
+
+- **`/gemini:implement` is built around that.** It refuses to run outside a git repository, snapshots `git status --porcelain` first, and afterwards reconciles what the agent *declared* it changed against what git *shows* changed — reporting undeclared writes and declared-but-absent ones separately. It never commits, so `git diff` and `git checkout` stay available. The check is honest about its limit: a write outside the repository root does not appear in `git status`, and nothing in agy prevents one.
+
+### The underspecification gate, and why it is written the way it is
+
+The first version of the agent prompt said to stop and report `NEEDS_CONTEXT` when a brief is "ambiguous or incomplete". Given the brief *"Add caching to the format module so it is faster"*, it implemented an unbounded `Map` cache on two functions, reported `DONE`, and raised no concerns. It did not consider that ambiguous.
+
+Replacing the adjective with five literal tests — behavior change with no stated input/output, state introduced with no bound or lifetime or invalidation, a goal that is only an adjective, more than one plausible location, a dependency on a value that appears nowhere — changed the outcome on the identical brief: `NEEDS_CONTEXT`, zero files written, the three decisions it would have been making listed, and a recommendation to confirm. A regression on a fully specified brief still completed and wrote both files, so the gate discriminates rather than just refusing.
+
+`view_file` reading outside `--add-dir` is what makes this gate matter more than it looks: the failure mode is not a bad edit in one file, it is a confident agent acting on requirements it invented.
+
+### Fixed
+
+- **The eval harness was corrupting test cases containing backslashes.** Every config ran through `exec: bash ./run-agy.sh …`, which passed the prompt as a shell argument, and the shell ate one level of backslash escaping on the way. A test case containing
+
+  ```js
+  cmdName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  ```
+
+  reached the model as
+
+  ```js
+  cmdName.replace(/[.*+?^${}()|[\]\]/g, "\$&")
+  ```
+
+  which is genuinely broken. The model reported an unterminated character class and a replacement string that fails to prepend a backslash — correct findings about the text it was given, and indistinguishable from a hallucination until you compare what the harness sent against the file on disk. Both 3.6 and 3.7 produced it, 6 runs out of 6; feeding the same diff to agy directly, both said the code was correct.
+
+  Replaced with `eval/agy-provider.js`, a promptfoo JS provider that writes the prompt to agy's stdin, so nothing but flag values ever reaches a shell. `run-agy.sh` is deleted. Only cases with consecutive backslashes were affected — `incidental-findings` and `security-filename-injection` — which is why this survived several releases: it corrupts one or two rows instead of failing the run.
+
+- **Infrastructure failures no longer count as failed test cases.** agy reports a 503, an exhausted quota, or a headless permission denial on stdout with exit 0. The old runner handed those straight back as the model's answer, the rubric failed them for not containing a review, and an outage came out looking like a quality regression. Measured while writing this release: a 503 cost 3.7 a point on the hard set, and two permission denials cost the bare-3.7 arm two points on the main suite.
+
+  `agy-provider.js` now classifies those as provider errors, so promptfoo counts them in its error column instead of the pass rate. The loose tokens (`RESOURCE_EXHAUSTED`, `429`, `503`) are only trusted on short outputs, since a real review may well discuss retry handling in the code it is reviewing.
+
+### Changed
+
+- **`/gemini:setup` installs and verifies four agents.** Expect `agents : 4 processed`. A new step 7 checks that `gemini-implement` has no shell (expects `NO_SHELL_OK`), since for that agent the read-only check does not apply and the absence of execution is the property worth confirming.
+- **`agy/plugin.json` moves to 0.3.0**, because `agy/agents/` gained a file. Per the rule added in 0.2.2, it moves only when the agents do.
+
 ## [0.2.2] — 2026-08-02
 
 `gemini` only. The reviewer has been unable to open a file since agy started soft-denying permissions in headless mode, and the failure took the whole review with it. This release gives the capability back.

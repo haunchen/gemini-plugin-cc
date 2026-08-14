@@ -1,0 +1,29 @@
+diff --git a/src/jobs/runner.py b/src/jobs/runner.py
+index a91c33e..d40b7f5 100644
+--- a/src/jobs/runner.py
++++ b/src/jobs/runner.py
+@@ -52,18 +52,25 @@ class JobRunner:
+     def run_job(self, job_id: str) -> JobResult:
+         lock = self._locks.acquire(job_id)
+
+         job = self._store.load(job_id)
++
++        # Guard added after INC-4412: a cancelled job used to run to completion
++        # because nothing checked the status between enqueue and execution.
++        if job.status == "cancelled":
++            log.info("job %s was cancelled before it started", job_id)
++            return JobResult(job_id=job_id, status="cancelled", output=None)
++
++        if job.attempts >= self._max_attempts:
++            log.warning("job %s exhausted retries", job_id)
++            return JobResult(job_id=job_id, status="failed", output=None)
+
+         try:
+             output = self._execute(job)
+             self._store.mark_done(job_id, output)
+             return JobResult(job_id=job_id, status="done", output=output)
+         except Exception as exc:
+             self._store.mark_failed(job_id, str(exc))
+             return JobResult(job_id=job_id, status="failed", output=None)
+         finally:
+             self._locks.release(lock)
