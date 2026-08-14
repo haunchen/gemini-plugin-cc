@@ -166,6 +166,14 @@ agy exposes no sampling controls, so eval runs vary more than the pre-0.2.0 numb
 
 Judge note: the rubric provider must be a current model. `claude-sonnet-4-20250514` is retired (404) and promptfoo ≤ 0.121.5 sends a deprecated `temperature` to newer models (400) — either failure grades every case FAIL regardless of output quality. Use promptfoo `@latest`.
 
+**A red cell has three possible causes, and only one of them is the model.** Read the reason before recording any number:
+
+- **A real failure** — a written rubric verdict explaining what the review missed or overclaimed.
+- **A provider error** — `agy did not return a response: …` in the error field, with an empty output. That is a 503, an exhausted quota, or a headless permission denial. `agy-provider.js` classifies these so promptfoo counts them as errors, not failures; exclude them from scores.
+- **A judge parse failure** — the reason reads `Could not extract JSON from llm-rubric response` or `No output` while `response.output` holds a perfectly normal review. The grading call failed, not the model. promptfoo counts these as failures, so they have to be excluded by hand.
+
+That last one is not rare: 4 of 39 cells in one run, still 1 of 39 after dropping concurrency from 4 to 2, so it is not purely a rate-limit effect. A score reported without excluding these two categories will understate whichever arm got unlucky, which is exactly how a service outage turns into a fabricated quality regression.
+
 ## Versioning
 
 The two plugins version independently — bump only the one you changed. They happen to both sit at 0.2.0 because the agy migration touched both.

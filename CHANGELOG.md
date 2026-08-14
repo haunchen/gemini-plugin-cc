@@ -24,15 +24,23 @@ Both plugins are versioned independently, but have moved together so far, so rel
 
 ### The default model is 3.7 here and 3.6 in `/gemini:review`
 
-Deliberate, and measured — with one caveat stated up front: the review numbers below were produced *before* the harness backslash bug was fixed, so they are the last readings from the old runner rather than a clean rerun.
+Deliberate, and measured on the fixed harness — two full runs of the 12-case suite, with provider errors (agy 503s, headless permission denials) and judge parse failures excluded rather than counted as losses:
 
-On the existing 12 cases: 3.6 scored 12/12, 3.7 11/12. The single difference was `incidental-findings`, which is one of exactly two cases the harness corrupted — 3.7 was failed for reporting the broken regex it was shown. Excluding that case leaves 11/11 each.
+| | run 1 | run 2 | total |
+|---|---|---|---|
+| 3.6 + agent | 10/11 | 11/12 | **21/23** |
+| 3.7 + agent | 11/11 | 10/11 | **21/22** |
+| 3.7 bare | 4/10 | 6/10 | 10/20 |
 
-On four new reasoning-heavy cases written for this release — a `Promise.all` that defeats a dedup guard, a cache key missing the dimensions its value depends on, early returns that skip the `finally` releasing a lock, plus a negative control of genuinely safe parallelism — 4/4 each, and neither flagged the control.
+The cases each one dropped were different every run — 3.6 lost `snowflake-filter` in the first and `security-filename-injection` in the second; 3.7 lost `snowflake-filter` only in the second. That pattern is sampling variance, not a capability gap, which is what you would expect given agy exposes no sampling controls.
 
-A pairwise comparison across 16 cases in both orderings, judged by Claude Sonnet 4.6, split 5:2 in decisive cases. At that sample size, under a coin-flip null, a split that lopsided or worse turns up about 45% of the time. That is noise, not a signal, and it is the whole basis for leaving review on 3.6: no measurable improvement, no reason to change what people already rely on.
+On four new reasoning-heavy cases written for this release — a `Promise.all` that defeats a dedup guard, a cache key missing the dimensions its value depends on, early returns that skip the `finally` releasing a lock, plus a negative control of genuinely safe parallelism — 4/4 each, zero errors, and neither flagged the control.
 
-What that leaves is Google's own figure for where 3.7 gained — writing code (DeepSWE v1.1 49.0% → 65.3%) — which is this command's job and not review's.
+A pairwise comparison across 16 cases in both orderings, judged by Claude Sonnet 4.6, split 5:2 in decisive cases. At that sample size, under a coin-flip null, a split that lopsided or worse turns up about 45% of the time.
+
+None of that is a signal, and that is the whole basis for leaving review on 3.6: no measurable improvement, no reason to change what people already rely on. What remains is Google's own figure for where 3.7 gained — writing code (DeepSWE v1.1 49.0% → 65.3%) — which is this command's job and not review's.
+
+The bare-model column is the one that moved, and it is the argument for the agent prompts existing at all: unprompted 3.7 escalates a prompt rewrite to a prompt-injection vulnerability, a CI memory flag to a security issue, and a routine dependency bump to substantial risk.
 
 ### What was measured about writing files
 

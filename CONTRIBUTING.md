@@ -61,6 +61,8 @@ Use promptfoo `@latest`. Older releases send a deprecated `temperature` to curre
 
 Eval runs hit live agy quota — be signed in via `agy` OAuth.
 
+Before recording a score, check why each red cell is red. Three different things look identical in the summary table: a genuine rubric failure (has a written verdict), a provider error (`agy did not return a response: …`, empty output — a 503, quota, or headless permission denial, already counted separately by promptfoo), and a judge parse failure (`Could not extract JSON from llm-rubric response` or `No output`, while the output field holds a normal review — promptfoo counts this as a failure even though the grading call is what broke). Only the first belongs in a score. The last one hit 4 of 39 cells in one run and 1 of 39 at half the concurrency, so it is worth checking every time.
+
 Expect more run-to-run variance than the pre-0.2.0 numbers. Gemini CLI was pinned to `temperature: 0` through `.gemini/settings.json`; agy exposes no sampling controls at all, so that file was removed and there is nothing to replace it with. Treat a one-case difference between runs as noise, not a regression.
 
 When changing an agent's system prompt, run the relevant eval before and after. A useful guard rail: the custom prompt should not regress on cases the bare model already passes.
