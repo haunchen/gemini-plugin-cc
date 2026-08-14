@@ -24,9 +24,15 @@ Both plugins are versioned independently, but have moved together so far, so rel
 
 ### The default model is 3.7 here and 3.6 in `/gemini:review`
 
-Deliberate, and measured. On this repo's eval suite the two are indistinguishable at reviewing: 12/12 each on the existing cases, 4/4 each on four new reasoning-heavy ones written for this release (a `Promise.all` that defeats a dedup guard, a cache key missing the dimensions its value depends on, early returns that skip the `finally` releasing a lock, plus a negative control of genuinely safe parallelism that neither flagged). A pairwise comparison across 16 cases in both orderings — judged by Claude Sonnet 4.6 — split 5:2 in decisive cases, which at that sample size is noise, not a signal.
+Deliberate, and measured — with one caveat stated up front: the review numbers below were produced *before* the harness backslash bug was fixed, so they are the last readings from the old runner rather than a clean rerun.
 
-So review stays on 3.6, and 3.7 gets the command whose job is writing code, where Google's own numbers put the gain (DeepSWE v1.1 49.0% → 65.3%).
+On the existing 12 cases: 3.6 scored 12/12, 3.7 11/12. The single difference was `incidental-findings`, which is one of exactly two cases the harness corrupted — 3.7 was failed for reporting the broken regex it was shown. Excluding that case leaves 11/11 each.
+
+On four new reasoning-heavy cases written for this release — a `Promise.all` that defeats a dedup guard, a cache key missing the dimensions its value depends on, early returns that skip the `finally` releasing a lock, plus a negative control of genuinely safe parallelism — 4/4 each, and neither flagged the control.
+
+A pairwise comparison across 16 cases in both orderings, judged by Claude Sonnet 4.6, split 5:2 in decisive cases. At that sample size, under a coin-flip null, a split that lopsided or worse turns up about 45% of the time. That is noise, not a signal, and it is the whole basis for leaving review on 3.6: no measurable improvement, no reason to change what people already rely on.
+
+What that leaves is Google's own figure for where 3.7 gained — writing code (DeepSWE v1.1 49.0% → 65.3%) — which is this command's job and not review's.
 
 ### What was measured about writing files
 
