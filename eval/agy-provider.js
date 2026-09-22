@@ -31,6 +31,18 @@
 //         model: gemini-3.6-flash-high
 //         addDir: /path/to/repo     # optional; grants file reads
 //         timeout: 5m               # optional, passed to --print-timeout
+//
+// The call carries --output-format json, which wraps the reply in
+// {conversation_id, status, response, duration_seconds, num_turns, usage}.
+// `status` is the first thing checked: it is a field agy sets, not a string
+// we pattern-match out of prose.
+//
+// It deliberately does NOT carry --json-schema. Measured on agy 1.2.7 with
+// --agent gemini-review: the schema is silently ignored, the reply comes back
+// as markdown, num_turns is 4, and the same report is repeated four times for
+// 6461 output tokens. The agent prompt's "## Output Format" section wins.
+// Without --agent the bare model does emit JSON, but `response` then holds two
+// concatenated JSON objects. The arm that works is not the arm being measured.
 
 const { spawn } = require('node:child_process');
 
@@ -59,6 +71,61 @@ const SHORT_OUTPUT = 1000;
 function infraFailure(output) {
   if (INFRA_FAILURE.some((re) => re.test(output))) return true;
   return output.length < SHORT_OUTPUT && INFRA_TOKENS.test(output);
+}
+
+// Parse agy's --output-format json envelope.
+//
+// Three layers, in order, because only the first one is new and the other two
+// are the only detection that has actually been verified:
+//   1. envelope.status !== "SUCCESS"
+//   2. envelope unparseable -> fall back to the regex heuristics on raw text
+//   3. envelope fine but response matches the heuristics (e.g. the one-line
+//      "no output produced" a discarded turn leaves behind)
+//
+// Layer 1 alone is not enough: a permission denial could not be reproduced on
+// the machine this was written on (--agent gemini-review read a file fine), so
+// what `status` holds for a denial is unknown. Dropping layers 2 and 3 would
+// trade verified detection for unverified detection.
+function parseAgyResult(stdout, stderr, exitCode) {
+  const raw = `${stdout}${stderr}`.trim();
+  if (!raw) {
+    return { error: `agy produced no output (exit ${exitCode})` };
+  }
+
+  let envelope = null;
+  try {
+    envelope = JSON.parse(raw);
+  } catch {
+    envelope = null;
+  }
+
+  if (!envelope || typeof envelope !== 'object' || typeof envelope.response !== 'string') {
+    if (infraFailure(raw)) {
+      return { error: `agy did not return a response: ${raw.slice(0, 300)}` };
+    }
+    return { error: `agy returned an unparseable envelope: ${raw.slice(0, 300)}` };
+  }
+
+  if (envelope.status !== 'SUCCESS') {
+    return { error: `agy returned status ${envelope.status}: ${raw.slice(0, 300)}` };
+  }
+
+  const output = envelope.response.trim();
+  if (!output) {
+    return { error: `agy returned an empty response (exit ${exitCode})` };
+  }
+  if (infraFailure(output)) {
+    return { error: `agy did not return a response: ${output.slice(0, 300)}` };
+  }
+
+  return {
+    output,
+    metadata: {
+      num_turns: envelope.num_turns,
+      output_tokens: envelope.usage && envelope.usage.output_tokens,
+      duration_seconds: envelope.duration_seconds,
+    },
+  };
 }
 
 // Kill the child if agy blows past its own --print-timeout. Parses the same
@@ -91,6 +158,7 @@ class AgyProvider {
     if (this.config.agent) args.push('--agent', this.config.agent);
     args.push('--model', this.config.model);
     args.push('--print-timeout', timeout);
+    args.push('--output-format', 'json');
     if (this.config.addDir) args.push('--add-dir', this.config.addDir);
 
     return new Promise((resolve) => {
@@ -128,16 +196,7 @@ class AgyProvider {
       child.on('error', (err) => finish({ error: `agy failed to start: ${err.message}` }));
 
       child.on('close', (code) => {
-        const output = `${stdout}${stderr}`.trim();
-        if (!output) {
-          finish({ error: `agy produced no output (exit ${code})` });
-          return;
-        }
-        if (infraFailure(output)) {
-          finish({ error: `agy did not return a response: ${output.slice(0, 300)}` });
-          return;
-        }
-        finish({ output });
+        finish(parseAgyResult(stdout, stderr, code));
       });
 
       child.stdin.on('error', () => {
@@ -147,5 +206,7 @@ class AgyProvider {
     });
   }
 }
+
+AgyProvider.parseAgyResult = parseAgyResult;
 
 module.exports = AgyProvider;
