@@ -13,14 +13,14 @@
 | ID | tier | 缺陷 | 證據 |
 |----|------|------|------|
 | HC1 | L2 | `buildQuote` 的 module-level Map 只以 `input.customerId` 為 key，而回傳的報價還取決於 sku、quantity、currency。同一客戶換 SKU 會拿到前一次的報價 | 主缺陷，`promptfooconfig-hard.yaml` 的 H2 已在看 |
-| HC2 | L2 | 快取項目永不清除，沒有 TTL 也沒有上限，長跑進程會單調成長 | 3.7 抓到、3.6 全漏。`promptfooconfig-hard.yaml` 的 H2 rubric 明文把它列為「extras」不計分，這裡把它獨立成 recall 點 |
+| HC2 | L2 | 快取項目永不清除，沒有 TTL 也沒有上限，長跑進程會單調成長 | `hard-cache-key.diff` 第 11 行新增 `const quoteCache = new Map<string, Quote>();`，第 33 行 `quoteCache.set(input.customerId, quote);` 寫入後，整份 diff 沒有任何刪除、TTL 或上限檢查——快取只增不減。`promptfooconfig-hard.yaml` 的 H2 rubric 明文把它列為「extras」不計分，這裡把它獨立成 recall 點。pairwise 實測來源：3.7 抓到、3.6 全漏 |
 
 ## hard-lock-early-return.diff
 
 | ID | tier | 缺陷 | 證據 |
 |----|------|------|------|
 | HL1 | L2 | 兩個 early return 加在取得 lock 與 `try` 之間，繞過 `finally` 的釋放，該 job_id 之後永久死鎖 | 主缺陷，`promptfooconfig-hard.yaml` 的 H3 已在看 |
-| HL2 | L2 | `_store.load` 同樣在 `try` 之外，它拋錯時 lock 也不會釋放——與 early return 是同一個機制的第二個出口 | 3.7 抓到、3.6 全漏 |
+| HL2 | L2 | `_store.load` 同樣在 `try` 之外，它拋錯時 lock 也不會釋放——與 early return 是同一個機制的第二個出口 | `hard-lock-early-return.diff` 第 7 行取得 lock（`lock = self._locks.acquire(job_id)`），第 9 行 `job = self._store.load(job_id)` 在 `try`（第 21 行）之外執行；`_store.load` 若拋錯，例外會直接往外傳，不會進入第 28–29 行的 `finally: self._locks.release(lock)`，該 job_id 的 lock 因而永不釋放。pairwise 實測來源：3.7 抓到、3.6 全漏 |
 
 ## attribute-shadowing.diff
 
@@ -41,7 +41,7 @@ try/except 少了 `self.message is not None` 的守衛，但這被 diff 本身�
 
 | ID | tier | 缺陷 | 證據 |
 |----|------|------|------|
-| RD1 | L2 | 警告／資訊區塊的標題文案固定宣稱「顯示前 10 個」，但截斷只在總數超過 10 時才發生；總數 ≤ 10 時全部項目都會被顯示，標題仍宣告一個並未生效的上限，與實際呈現的內容不符 | `refactor-display-logic.diff`：標題文案（第 53 行，infos 第 66 行）不論數量固定寫死「顯示前 10 個」；`.slice(0, 10)`（第 54 行，infos 第 67 行）巢狀在外層 `if (warnings.length > 0)`／`if (infos.length > 0)`（第 52、65 行）內，無條件執行，總數 ≤ 10 時是 no-op；只有「還有 N 個未顯示」的揭露（第 59–60 行，infos 第 72–73 行）才真正被 `length > 10` 把關。pairwise 實測來源：3.6 抓到、3.7 全漏 |
+| RD1 | L2 | 警告／資訊區塊的標題文案固定宣稱「顯示前 10 個」，但截斷只在總數超過 10 時才發生；總數 ≤ 10 時全部項目都會被顯示，標題仍宣告一個並未生效的上限，與實際呈現的內容不符 | `refactor-display-logic.diff`：標題文案（第 53 行，infos 第 66 行）固定寫死「顯示前 10 個」；`.slice(0, 10)`（第 54 行，infos 第 67 行）巢狀在外層 `if (warnings.length > 0)`／`if (infos.length > 0)`（第 52、65 行）內，無條件執行，總數 ≤ 10 時是 no-op；只有「還有 N 個未顯示」的揭露（第 59–60 行，infos 第 72–73 行）才真正被 `length > 10` 把關。pairwise 實測來源：3.6 抓到、3.7 全漏 |
 
 注意：這份 diff 同時是 `promptfooconfig.yaml` 的 TC6（罰誤報）。兩邊不衝突——TC6 只在
 報成 HIGH 或安全漏洞時 FAIL，這裡要的是把誤導文案報成 LOW 或 MEDIUM。它是唯一在兩份
