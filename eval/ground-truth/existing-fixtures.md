@@ -1,7 +1,9 @@
 # 既有 fixture 的 recall 點
 
-這五份 diff 原本就在 `eval/test-cases/`，由 `promptfooconfig.yaml` 以「找到那一個缺陷」
-的形式計分。這裡補的是它們埋著、但沒有任何 assertion 在看的缺陷，以及 tier 標註。
+這五份 diff 原本就在 `eval/test-cases/`，由 `promptfooconfig.yaml` 或
+`promptfooconfig-hard.yaml`（`hard-cache-key.diff`、`hard-lock-early-return.diff`
+兩份）以「找到那一個缺陷」的形式計分。這裡補的是它們埋著、但沒有任何 assertion 在看的
+缺陷，以及 tier 標註。
 
 四條次級缺陷來自 3.6 與 3.7 的 pairwise 實測——兩代模型互相漏掉對方抓到的那一組。
 它們坐在偵測門檻附近，才當得了敏感度計量器；太明顯的缺陷不退化到完全壞掉都會 PASS。
@@ -10,7 +12,7 @@
 
 | ID | tier | 缺陷 | 證據 |
 |----|------|------|------|
-| HC1 | L2 | `buildQuote` 的 module-level Map 只以 `input.customerId` 為 key，而回傳的報價還取決於 sku、quantity、currency。同一客戶換 SKU 會拿到前一次的報價 | 主缺陷，`promptfooconfig.yaml` 的 H2 已在看 |
+| HC1 | L2 | `buildQuote` 的 module-level Map 只以 `input.customerId` 為 key，而回傳的報價還取決於 sku、quantity、currency。同一客戶換 SKU 會拿到前一次的報價 | 主缺陷，`promptfooconfig-hard.yaml` 的 H2 已在看 |
 | HC2 | L2 | 快取項目永不清除，沒有 TTL 也沒有上限，長跑進程會單調成長 | 3.7 抓到、3.6 全漏。`promptfooconfig-hard.yaml` 的 H2 rubric 明文把它列為「extras」不計分，這裡把它獨立成 recall 點 |
 
 ## hard-lock-early-return.diff
@@ -25,7 +27,15 @@
 | ID | tier | 缺陷 | 證據 |
 |----|------|------|------|
 | AS1 | L1 | 把 Telegram Update 物件存成 `self.update`，遮蔽了類別的 `update()` 方法，`pm.update('text')` 會在執行期炸掉 | 主缺陷，`promptfooconfig.yaml` 的 TC5 已在看 |
-| AS2 | L2 | 新增的 `__aexit__` try/except 少了 `self.message is not None` 的守衛 | 3.6 抓到、3.7 全漏 |
+| AS2 | L2 | 新增的 `except Exception: pass` 在 `__aexit__` 裡無條件吞掉 `edit_text` 拋出的所有例外，包含真實的 Telegram API 錯誤（網路逾時、訊息已被刪除等）；edit 真正失敗時使用者收不到任何失敗提示，也沒有 log 或其他痕跡，錯誤被完全靜默 | `attribute-shadowing.diff` 第 21–24 行：`try: await self.message.edit_text(...) except Exception: pass` 不分例外種類、不留 log，任何 `edit_text` 失敗都會被吞掉且不留痕跡。pairwise 實測來源：3.6 抓到、3.7 全漏 |
+
+AS2 措辭曾於 2026-09-22（全分支 Final Review 之後）修正：原描述宣稱新增的 `__aexit__`
+try/except 少了 `self.message is not None` 的守衛，但這被 diff 本身推翻——`__aexit__`
+只有在 `__aenter__` 成功回傳後才會被呼叫，而 `self.message` 正是在 `__aenter__` 裡賦值，
+走到 `__aexit__` 時不可能是 None；就算是 None，`None.edit_text(...)` 拋出的
+`AttributeError` 也會被同一個 hunk 新加的 `except Exception: pass` 吃掉。實際成立的缺陷
+方向相反：這個 blanket except 會把 None 情形與真實的 Telegram API 錯誤一起吞掉，edit
+真正失敗時使用者收不到任何失敗訊息，也沒有 log 或痕跡，錯誤被完全靜默。
 
 ## refactor-display-logic.diff
 

@@ -227,3 +227,8 @@ These are not quality regressions. They are out of every denominator above.
 - 三輪之間跳動的 metric（抽樣變異，不得單獨引用）：`G10`（recall-L2，X o o）、`DR1`（recall-L2，X X o）、`DR2`（recall-L2，o X X）、`HL2`（recall-L2，o X X）、`AS2`（recall-L2，o X X）、`RD1`（recall-L2，X o o）、`N1`（fabrication，X o o）。25 條裡有 7 條會翻面，其中 6 條落在 recall-L2（使 recall-L2 的彙總數字本身也跟著在 7/12、6/12、7/12 之間跳動，不能單獨引用彙總值當基準線，只有上面列出的個別一致條目可用）、1 條落在 fabrication（`N1`，使 fabrication 彙總在 6/7 與 7/7 之間跳動）。四條選來當敏感度計量點的 pairwise 次級缺陷（`HC2`、`HL2`、`AS2`、`RD1`）裡有三條（`HL2`、`AS2`、`RD1`）落在這個跳動區，只有 `HC2` 三輪全過——它們確實坐在偵測門檻附近，符合當初選它們的理由。
 
 基準線只採三輪方向一致的數字。
+
+注記：AS2 的 rubric 於本 baseline 跑完後（2026-09-22，全分支 Final Review 之後）改寫——
+原判準宣稱的機制被 `attribute-shadowing.diff` 自身推翻，詳見
+`eval/ground-truth/existing-fixtures.md`。因此上表 AS2 一格的三輪讀數（recall-L2，`o X X`）
+反映的是已被取代的判準，不得沿用；下一輪重跑才會得到新判準下的數字。

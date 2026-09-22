@@ -4,7 +4,7 @@
 
 ## Eval
 
-**罰誤報案例** — `eval/promptfooconfig.yaml` 裡那六個（TC2/3/6/7/8/9）。它們的 diff 本身是乾淨的，PASS 的意思是「reviewer 沒有無中生有」。判定是二元的。
+**罰誤報案例** — `eval/promptfooconfig.yaml` 裡那六個（TC2/3/6/7/8/9）。它們的 diff 本身是乾淨的，PASS 的意思是「reviewer 沒有無中生有」。判定是二元的。例外：TC6（`refactor-display-logic.diff`）不是完全乾淨——`eval/ground-truth/existing-fixtures.md` 記了一條已查證的真缺陷 RD1，並在 recall config 裡當 recall 點計分；TC6 只在報成 HIGH 或安全漏洞時才 FAIL，其餘五份不受此例外影響。
 
 **虛構關卡** — 掛在一份**有真缺陷**的 diff 上、針對特定錯誤宣稱的 assertion（如 `migration-cli-entrypoint.diff` 的 N1–N7）。與罰誤報案例的差別在素材：那邊沒有東西可報，這邊有東西可報但模型可能多報一條不存在的事實。兩者量的不是同一回事，不要互相代稱。
 _Avoid_：把虛構關卡叫「誤報案例」。

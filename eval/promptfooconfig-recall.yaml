@@ -132,7 +132,7 @@ tests:
         value: "AS1. Grade PASS if the review recognises that storing the Telegram Update object as self.update shadows the class's update() method and causes a runtime failure when that method is called, and that renaming it resolves the collision. Grade FAIL if the review misses the shadowing."
       - type: llm-rubric
         metric: recall-L2
-        value: "AS2. Grade PASS if the review reports that the exception-handling path added in __aexit__ is missing a check that the message attribute is not None before using it, so it can fail on the error path. Grade FAIL if the review does not raise that missing guard."
+        value: "AS2. Grade PASS if the review reports that the bare except Exception: pass added around edit_text in __aexit__ swallows every exception unconditionally — including a genuine failure such as a network timeout or the message having been deleted — with no logging or other trace, so the user gets no failure notice at all when the edit truly fails. Grade FAIL if the review does not raise that silent swallowing. Do NOT fail the review for correctly noting that self.message cannot be None when __aexit__ runs — it cannot, since __aexit__ only executes after __aenter__ has returned and assigned it."
   - vars:
       diff: "file://test-cases/refactor-display-logic.diff"
     assert:
