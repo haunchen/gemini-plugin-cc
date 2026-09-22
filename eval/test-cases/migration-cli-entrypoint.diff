@@ -1,0 +1,348 @@
+diff --git a/backend/package.json b/backend/package.json
+index 7c3a298..fd87bb4 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -13,7 +13,8 @@
+     "lint": "eslint",
+     "test": "vitest run",
+     "test:watch": "vitest",
+-    "backup": "node scripts/backup.mjs"
++    "backup": "node scripts/backup.mjs",
++    "db:migrate-from-sqlite": "node scripts/migrate-sqlite-to-pg.mjs"
+   },
+   "dependencies": {
+     "next": "16.1.6",
+@@ -23,10 +24,12 @@
+     "zod": "^4.3.6"
+   },
+   "devDependencies": {
++    "@types/better-sqlite3": "^9.6.0",
+     "@types/node": "^20",
+     "@types/pg": "^8.20.3",
+     "@types/react": "^19",
+     "@types/react-dom": "^19",
++    "better-sqlite3": "^13.0.2",
+     "eslint": "^9",
+     "eslint-config-next": "16.1.6",
+     "typescript": "^5",
+diff --git a/backend/scripts/migrate-sqlite-to-pg.mjs b/backend/scripts/migrate-sqlite-to-pg.mjs
+new file mode 100644
+index 0000000..b8b861b
+--- /dev/null
++++ b/backend/scripts/migrate-sqlite-to-pg.mjs
+@@ -0,0 +1,161 @@
++import Database from 'better-sqlite3';
++import { Pool } from 'pg';
++
++/**
++ * 一次性搬遷：SQLite → PostgreSQL。
++ *
++ * 三件事缺一不可：
++ * 1. 依外鍵依賴序寫入（含 accounts.settlement_account_id 自我參照的兩趟寫入）
++ * 2. setval 重設 identity sequence——帶原 id 直接 insert 不會推進 sequence，
++ *    漏這步下一筆新增立刻撞主鍵
++ * 3. 驗證列數與帳戶餘額與來源一致（R7：列數與帳戶餘額須與搬遷前一致）
++ *
++ * idempotency_keys 為分鐘級暫態紀錄，不搬。
++ */
++
++// 依外鍵依賴排序；每張表列出要搬的欄位（順序即 INSERT 欄位順序）。
++//
++// accounts.settlement_account_id 是自我參照外鍵，可能指向 id 較大、同一批次中
++// 尚未插入的同表列（PUT /api/moneybook/accounts/[id] 允許事後任意設定，
++// 不保證只指向較早建立的帳戶）。PostgreSQL 的 FK 預設非 DEFERRABLE、立即檢查，
++// 依原 id 順序寫入無法保證安全，因此用 selfRef 標記後分兩趟寫：
++// 先以 NULL 插入該欄位，全部表寫完後再一次性 UPDATE 回填。
++const TABLES = [
++  { name: 'users', columns: ['id', 'external_id', 'name', 'default_account', 'created_at', 'updated_at'] },
++  {
++    name: 'accounts',
++    columns: ['id', 'user_id', 'owner_id', 'is_shared', 'name', 'type', 'balance', 'initial_balance', 'currency', 'is_asset', 'icon', 'sort_order', 'settlement_account_id', 'is_active', 'created_at', 'updated_at'],
++    selfRef: 'settlement_account_id',
++  },
++  { name: 'categories', columns: ['id', 'user_id', 'name', 'type', 'icon', 'sort_order', 'is_active', 'created_at', 'updated_at'] },
++  { name: 'holdings', columns: ['id', 'user_id', 'account_id', 'symbol', 'name', 'market', 'currency', 'shares', 'avg_cost', 'current_price', 'price_updated', 'is_active', 'created_at', 'updated_at'] },
++  { name: 'transactions', columns: ['id', 'user_id', 'account_id', 'category_id', 'type', 'amount', 'description', 'date', 'to_account_id', 'original_currency', 'original_amount', 'source', 'import_hash', 'actor_external_id', 'created_at', 'updated_at'] },
++  { name: 'stock_transactions', columns: ['id', 'user_id', 'holding_id', 'type', 'shares', 'price', 'amount', 'currency', 'exchange_rate', 'amount_twd', 'fee', 'tax', 'date', 'note', 'source', 'actor_external_id', 'created_at', 'updated_at'] },
++  { name: 'exchange_rates', columns: ['id', 'from_currency', 'to_currency', 'rate', 'updated_at'] },
++  { name: 'audit_log', columns: ['id', 'request_id', 'ts', 'actor_external_id', 'user_id', 'method', 'path', 'status', 'duration_ms', 'entity_type', 'entity_id', 'action'] },
++];
++
++/**
++ * 驗證來源／目標的彙總值一致，不符則拋出描述性錯誤。
++ * 供列數驗證與 accounts 餘額加總驗證共用，亦可獨立單元測試其失敗行為。
++ */
++export function assertMatches(label, expected, actual) {
++  if (expected !== actual) {
++    throw new Error(`搬遷驗證失敗：${label} 來源 ${expected}、目標 ${actual}`);
++  }
++}
++
++export async function migrateSqliteToPg(sqlitePath, pool) {
++  // fileMustExist：來源不存在時直接 throw，避免 better-sqlite3 靜默建空庫而做出「假成功」的搬遷
++  const src = new Database(sqlitePath, { readonly: true, fileMustExist: true });
++  const client = await pool.connect();
++  const counts = {};
++  const selfRefBackfill = [];
++  let sourceAccountBalance = 0;
++  let sourceAccountInitialBalance = 0;
++
++  try {
++    await client.query('BEGIN');
++
++    // 可重複執行：先清空目標表（外鍵靠 CASCADE 解，identity 一併重置後再 setval）
++    await client.query(
++      `TRUNCATE ${TABLES.map((t) => t.name).join(', ')}, idempotency_keys RESTART IDENTITY CASCADE`,
++    );
++
++    for (const { name, columns, selfRef } of TABLES) {
++      const rows = src.prepare(`SELECT ${columns.join(', ')} FROM ${name}`).all();
++      const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
++      const sql = `INSERT INTO ${name} (${columns.join(', ')}) VALUES (${placeholders})`;
++      for (const row of rows) {
++        const values = columns.map((c) => {
++          if (selfRef && c === selfRef) {
++            // 自我參照欄位先插 NULL，非 NULL 的原值留到全部列插入完成後回填
++            if (row[c] !== null && row[c] !== undefined) {
++              selfRefBackfill.push({ table: name, column: selfRef, id: row.id, value: row[c] });
++            }
++            return null;
++          }
++          return row[c];
++        });
++        await client.query(sql, values);
++      }
++      counts[name] = rows.length;
++
++      if (name === 'accounts') {
++        sourceAccountBalance = rows.reduce((sum, r) => sum + Number(r.balance ?? 0), 0);
++        sourceAccountInitialBalance = rows.reduce((sum, r) => sum + Number(r.initial_balance ?? 0), 0);
++      }
++    }
++
++    // 自我參照外鍵回填：全部列都已存在後才處理，不受來源 id 順序影響
++    for (const { table, column, id, value } of selfRefBackfill) {
++      await client.query(`UPDATE ${table} SET ${column} = $1 WHERE id = $2`, [value, id]);
++    }
++
++    // 重設 identity sequence：帶 id 直接 insert 不會推進 sequence
++    for (const { name } of TABLES) {
++      await client.query(
++        `SELECT setval(
++           pg_get_serial_sequence($1, 'id'),
++           GREATEST((SELECT COALESCE(MAX(id), 0) FROM ${name}), 1),
++           (SELECT COUNT(*) FROM ${name}) > 0
++         )`,
++        [name],
++      );
++    }
++
++    // 驗證列數
++    for (const { name } of TABLES) {
++      const res = await client.query(`SELECT COUNT(*)::bigint AS n FROM ${name}`);
++      assertMatches(`${name} 列數`, counts[name], Number(res.rows[0].n));
++    }
++
++    // 驗證帳戶餘額（R7 明文要求：列數與帳戶餘額須與搬遷前一致）
++    const balRes = await client.query(
++      'SELECT COALESCE(SUM(balance), 0)::bigint AS balance, COALESCE(SUM(initial_balance), 0)::bigint AS initial_balance FROM accounts',
++    );
++    assertMatches('accounts.balance 加總', sourceAccountBalance, Number(balRes.rows[0].balance));
++    assertMatches(
++      'accounts.initial_balance 加總',
++      sourceAccountInitialBalance,
++      Number(balRes.rows[0].initial_balance),
++    );
++
++    await client.query('COMMIT');
++  } catch (e) {
++    try {
++      await client.query('ROLLBACK');
++    } catch {
++      // 回滾失敗（連線已斷）時不遮蔽原始錯誤
++    }
++    throw e;
++  } finally {
++    client.release();
++    src.close();
++  }
++
++  return { counts };
++}
++
++// CLI：node scripts/migrate-sqlite-to-pg.mjs <sqlite 路徑>
++if (import.meta.url === `file://${process.argv[1]}`) {
++  const sqlitePath = process.argv[2];
++  if (!sqlitePath) {
++    console.error('用法：node scripts/migrate-sqlite-to-pg.mjs <sqlite 檔路徑>');
++    process.exit(1);
++  }
++  if (!process.env.DATABASE_URL) {
++    console.error('DATABASE_URL 未設定');
++    process.exit(1);
++  }
++  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
++  try {
++    const { counts } = await migrateSqliteToPg(sqlitePath, pool);
++    console.log('搬遷完成：');
++    for (const [table, n] of Object.entries(counts)) {
++      console.log(`  ${table}: ${n} 列`);
++    }
++  } finally {
++    await pool.end();
++  }
++}
+diff --git a/backend/tests/scripts/migrate-sqlite-to-pg.test.ts b/backend/tests/scripts/migrate-sqlite-to-pg.test.ts
+new file mode 100644
+index 0000000..3be2d01
+--- /dev/null
++++ b/backend/tests/scripts/migrate-sqlite-to-pg.test.ts
+@@ -0,0 +1,148 @@
++import { describe, it, expect, beforeAll, afterAll } from 'vitest';
++import { Pool } from 'pg';
++import Database from 'better-sqlite3';
++import { mkdtempSync, rmSync } from 'fs';
++import { tmpdir } from 'os';
++import path from 'path';
++import { makePoolDb, type Db } from '@/lib/db/pg';
++import { runMigrations } from '@/lib/db/migrations';
++import { migrateSqliteToPg, assertMatches } from '../../scripts/migrate-sqlite-to-pg.mjs';
++
++const TEST_URL = process.env.TEST_DATABASE_URL
++  ?? 'postgres://moneybook:devpass@127.0.0.1:55432/moneybook_dev';
++const SCHEMA = 'migrate_probe';
++
++let tmpDir: string;
++let sqlitePath: string;
++let adminPool: Pool;
++let pool: Pool;
++let db: Db;
++
++// 建一份最小但覆蓋外鍵依賴的 SQLite 來源庫
++function buildSourceDb(file: string): void {
++  const sdb = new Database(file);
++  sdb.exec(`
++    CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, external_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL, default_account INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
++    CREATE TABLE accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, owner_id INTEGER, is_shared INTEGER DEFAULT 0, name TEXT NOT NULL, type TEXT NOT NULL, balance INTEGER DEFAULT 0, initial_balance INTEGER DEFAULT 0, currency TEXT DEFAULT 'TWD', is_asset INTEGER DEFAULT 1, icon TEXT, sort_order INTEGER DEFAULT 0, settlement_account_id INTEGER, is_active INTEGER DEFAULT 1, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
++    CREATE TABLE categories (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL, icon TEXT, sort_order INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
++    CREATE TABLE holdings (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, account_id INTEGER NOT NULL, symbol TEXT NOT NULL, name TEXT NOT NULL, market TEXT NOT NULL, currency TEXT NOT NULL, shares REAL NOT NULL, avg_cost INTEGER NOT NULL, current_price INTEGER, price_updated INTEGER, is_active INTEGER DEFAULT 1, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
++    CREATE TABLE transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, account_id INTEGER NOT NULL, category_id INTEGER, type TEXT NOT NULL, amount INTEGER NOT NULL, description TEXT, date TEXT NOT NULL, to_account_id INTEGER, original_currency TEXT, original_amount INTEGER, source TEXT DEFAULT 'manual', import_hash TEXT, actor_external_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
++    CREATE TABLE stock_transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, holding_id INTEGER NOT NULL, type TEXT NOT NULL, shares REAL NOT NULL, price INTEGER, amount INTEGER, currency TEXT NOT NULL, exchange_rate REAL DEFAULT 1, amount_twd INTEGER, fee INTEGER DEFAULT 0, tax INTEGER DEFAULT 0, date TEXT NOT NULL, note TEXT, source TEXT DEFAULT 'manual', actor_external_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
++    CREATE TABLE exchange_rates (id INTEGER PRIMARY KEY AUTOINCREMENT, from_currency TEXT NOT NULL, to_currency TEXT NOT NULL, rate REAL NOT NULL, updated_at INTEGER NOT NULL);
++    CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL, ts INTEGER NOT NULL, actor_external_id TEXT, user_id INTEGER, method TEXT NOT NULL, path TEXT NOT NULL, status INTEGER NOT NULL, duration_ms INTEGER NOT NULL, entity_type TEXT, entity_id INTEGER, action TEXT);
++    CREATE TABLE idempotency_keys (user_id INTEGER NOT NULL, key TEXT NOT NULL, body_hash TEXT NOT NULL, response TEXT NOT NULL, status INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (user_id, key));
++  `);
++  const now = 1754000000;
++  sdb.exec(`
++    INSERT INTO users (id, external_id, name, created_at, updated_at) VALUES (0, 'system:0', 'System', ${now}, ${now});
++    INSERT INTO users (id, external_id, name, created_at, updated_at) VALUES (7, 'discord:frank', 'Frank', ${now}, ${now});
++    -- id=3 的 settlement_account_id 指向 id=8（較大、後面才插入的同表列），
++    -- 用來驗證自我參照外鍵的兩趟寫入；is_shared=1 為非預設值（schema 預設 0），
++    -- 用來偵測 TABLES 欄位清單若漏掉該欄，搬遷後會落回 Postgres 預設值而被抓到。
++    INSERT INTO accounts (id, user_id, owner_id, is_shared, name, type, balance, initial_balance, settlement_account_id, created_at, updated_at) VALUES (3, 7, 7, 1, '現金', 'cash', 88000, 100000, 8, ${now}, ${now});
++    INSERT INTO accounts (id, user_id, owner_id, name, type, balance, initial_balance, created_at, updated_at) VALUES (8, 7, 7, '銀行', 'bank', 20000, 20000, ${now}, ${now});
++    -- icon='💰' 為非預設值（schema 預設 NULL），用途同上
++    INSERT INTO categories (id, user_id, name, type, icon, created_at, updated_at) VALUES (5, 0, '飲食', 'expense', '💰', ${now}, ${now});
++    INSERT INTO holdings (id, user_id, account_id, symbol, name, market, currency, shares, avg_cost, created_at, updated_at) VALUES (2, 7, 3, '2330', '台積電', 'TW', 'TWD', 100, 50000, ${now}, ${now});
++    INSERT INTO transactions (id, user_id, account_id, category_id, type, amount, date, created_at, updated_at) VALUES (11, 7, 3, 5, 'expense', 12000, '2026-07-30', ${now}, ${now});
++    INSERT INTO stock_transactions (id, user_id, holding_id, type, shares, price, amount, currency, exchange_rate, amount_twd, date, created_at, updated_at) VALUES (4, 7, 2, 'buy', 100, 50000, 5000000, 'TWD', 1, 5000000, '2026-07-20', ${now}, ${now});
++    INSERT INTO exchange_rates (id, from_currency, to_currency, rate, updated_at) VALUES (1, 'USD', 'TWD', 32.5, ${now});
++    INSERT INTO audit_log (id, request_id, ts, method, path, status, duration_ms) VALUES (9, 'req-1', ${now}, 'POST', '/api/moneybook/transactions', 201, 12);
++    INSERT INTO idempotency_keys (user_id, key, body_hash, response, status, created_at) VALUES (7, 'k', 'h', '{}', 201, ${now});
++  `);
++  sdb.close();
++}
++
++beforeAll(async () => {
++  tmpDir = mkdtempSync(path.join(tmpdir(), 'mb-migrate-'));
++  sqlitePath = path.join(tmpDir, 'source.db');
++  buildSourceDb(sqlitePath);
++
++  adminPool = new Pool({ connectionString: TEST_URL, max: 2 });
++  await adminPool.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE`);
++  await adminPool.query(`CREATE SCHEMA ${SCHEMA}`);
++  pool = new Pool({ connectionString: TEST_URL, max: 3, options: `-c search_path=${SCHEMA}` });
++  db = makePoolDb(pool);
++  await runMigrations(pool);
++});
++
++afterAll(async () => {
++  await pool.end();
++  await adminPool.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE`);
++  await adminPool.end();
++  rmSync(tmpDir, { recursive: true, force: true });
++});
++
++describe('migrateSqliteToPg', () => {
++  it('搬遷後各表列數與來源一致，idempotency_keys 不搬', async () => {
++    const { counts } = await migrateSqliteToPg(sqlitePath, pool);
++    expect(counts.users).toBe(2);
++    expect(counts.accounts).toBe(2);
++    expect(counts.categories).toBe(1);
++    expect(counts.holdings).toBe(1);
++    expect(counts.transactions).toBe(1);
++    expect(counts.stock_transactions).toBe(1);
++    expect(counts.exchange_rates).toBe(1);
++    expect(counts.audit_log).toBe(1);
++
++    const idem = await db.queryOne<{ n: number }>('SELECT COUNT(*) AS n FROM idempotency_keys');
++    expect(idem!.n).toBe(0);
++  });
++
++  it('保留原主鍵與帳戶餘額', async () => {
++    await migrateSqliteToPg(sqlitePath, pool);
++    const acc = await db.queryOne<{ id: number; balance: number; initial_balance: number }>(
++      'SELECT id, balance, initial_balance FROM accounts WHERE id = 3',
++    );
++    expect(acc!.balance).toBe(88000);
++    expect(acc!.initial_balance).toBe(100000);
++    const sys = await db.queryOne<{ external_id: string }>('SELECT external_id FROM users WHERE id = 0');
++    expect(sys!.external_id).toBe('system:0');
++  });
++
++  it('sequence 已續接：新增資料不撞既有主鍵', async () => {
++    await migrateSqliteToPg(sqlitePath, pool);
++    const now = Math.floor(Date.now() / 1000);
++    const row = await db.queryOne<{ id: number }>(
++      `INSERT INTO transactions (user_id, account_id, category_id, type, amount, date, created_at, updated_at)
++       VALUES (7, 3, 5, 'expense', 500, '2026-08-01', ?, ?) RETURNING id`,
++      [now, now],
++    );
++    expect(row!.id).toBeGreaterThan(11);
++  });
++
++  it('可重複執行（每次先清空目標表）', async () => {
++    await migrateSqliteToPg(sqlitePath, pool);
++    const { counts } = await migrateSqliteToPg(sqlitePath, pool);
++    expect(counts.users).toBe(2);
++    const n = await db.queryOne<{ n: number }>('SELECT COUNT(*) AS n FROM users');
++    expect(n!.n).toBe(2);
++  });
++
++  it('自我參照外鍵（settlement_account_id）指向較大 id 時仍搬遷成功並正確回填', async () => {
++    const { counts } = await migrateSqliteToPg(sqlitePath, pool);
++    expect(counts.accounts).toBe(2);
++    const acc = await db.queryOne<{ settlement_account_id: number | null }>(
++      'SELECT settlement_account_id FROM accounts WHERE id = 3',
++    );
++    expect(acc!.settlement_account_id).toBe(8);
++  });
++
++  it('非預設值欄位正確搬遷（偵測 TABLES 欄位清單遺漏）', async () => {
++    await migrateSqliteToPg(sqlitePath, pool);
++    const acc = await db.queryOne<{ is_shared: number }>('SELECT is_shared FROM accounts WHERE id = 3');
++    expect(acc!.is_shared).toBe(1);
++    const cat = await db.queryOne<{ icon: string | null }>('SELECT icon FROM categories WHERE id = 5');
++    expect(cat!.icon).toBe('💰');
++  });
++});
++
++describe('assertMatches', () => {
++  it('數值不一致時拋出描述性錯誤', () => {
++    expect(() => assertMatches('accounts.balance 加總', 100, 99)).toThrow('搬遷驗證失敗');
++  });
++
++  it('數值一致時不拋錯', () => {
++    expect(() => assertMatches('accounts.balance 加總', 100, 100)).not.toThrow();
++  });
++});

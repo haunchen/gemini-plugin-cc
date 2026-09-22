@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 
 Both plugins are versioned independently, but have moved together so far, so releases are tagged once for the repo (`v<version>`). See [CLAUDE.md](CLAUDE.md#versioning) for the bump rules.
 
+## [0.2.1] — 2026-09-22
+
+`gemini-images` only. `doctor.sh`'s diagnostics had drifted from the runtime code they exist to verify — found while turning a historical commit into an eval fixture (`eval/ground-truth/doctor-agy-bin.md`), fixed here.
+
+### Fixed
+
+- **`doctor.sh` now respects `AGY_BIN`.** The required-command check, the `agy --help` runnability probe, the agent-install check, and the `agy --version` query were all hardcoded to `agy` regardless of `AGY_BIN` — even though the diagnostic line already printed `AGY_BIN: ${AGY_BIN:-agy (default)}`, and `hooks/image-describe.mjs` has read `process.env.AGY_BIN` since it was written. A user who set `AGY_BIN` to anything else got a doctor report about a binary they were not using: it could report `agy runnable` while their actual configured binary was missing, or the reverse.
+
+  `OCR_BIN` (read by `hooks/intercept-image-read.sh`) had the identical defect in the optional `tesseract` check — fixed the same way. The `chi_tra` language-pack check is tesseract-specific (it shells out to `--list-langs`), so it now only runs when `OCR_BIN` resolves to `tesseract`; a custom OCR binary is not guaranteed to support that flag. `AGY_MODEL`, `MAX_WIDTH`, and `TMPDIR` are also printed in `--verbose` output but were checked and found not to share this defect — nothing in `doctor.sh`'s check logic reads them, they are display-only.
+
+- **The agent-install check no longer hardcodes `$HOME/.gemini`.** It now reads `${GEMINI_CONFIG_DIR:-$HOME/.gemini}`, matching the existing pattern in `plugins/gemini/hooks/check-agent-version.sh`. agy's config directory on platforms other than the one this was written on is untested, and a wrong guess here reported `agent missing` for users who had installed correctly.
+
 ## [0.3.0] — 2026-08-14
 
 `gemini` only. The plugin gets a command that writes to your files. Everything before this release only ever read them, and that line is worth crossing deliberately rather than quietly.

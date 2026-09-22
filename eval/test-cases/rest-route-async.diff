@@ -1,0 +1,356 @@
+diff --git a/backend/app/api/moneybook/accounts/[id]/route.ts b/backend/app/api/moneybook/accounts/[id]/route.ts
+index 318b971..88cbfd0 100644
+--- a/backend/app/api/moneybook/accounts/[id]/route.ts
++++ b/backend/app/api/moneybook/accounts/[id]/route.ts
+@@ -6,14 +6,15 @@ import type { AccountRow, RequestContext } from '@/lib/types';
+ 
+ type RouteContext = { params: Promise<{ id: string }> };
+ 
+-function getAccountOrThrow(ctx: RequestContext, accountId: number): AccountRow {
++async function getAccountOrThrow(ctx: RequestContext, accountId: number): Promise<AccountRow> {
+   if (!ctx.user) {
+     throw new AppError('UNAUTHORIZED', '未識別使用者', 401);
+   }
+ 
+-  const account = ctx.db.prepare(
++  const account = await ctx.db.queryOne<AccountRow>(
+     'SELECT * FROM accounts WHERE id = ? AND is_active = 1',
+-  ).get(accountId) as AccountRow | undefined;
++    [accountId],
++  );
+ 
+   if (!account) {
+     throw new AppError('ACCOUNT_NOT_FOUND', '找不到該帳戶，請先用 list_accounts 確認可用帳戶', 404);
+@@ -35,7 +36,7 @@ export const PUT = withMiddleware(async (request, ctx, routeCtx?: RouteContext)
+   if (Number.isNaN(accountId) || accountId <= 0) {
+     throw new AppError('VALIDATION_ERROR', '無效的 ID', 400);
+   }
+-  const account = getAccountOrThrow(ctx, accountId);
++  const account = await getAccountOrThrow(ctx, accountId);
+ 
+   const body = await request.json();
+   const data = parseBody(UpdateAccountSchema, body);
+@@ -62,9 +63,10 @@ export const PUT = withMiddleware(async (request, ctx, routeCtx?: RouteContext)
+   }
+   if (data.settlement_account_id !== undefined) {
+     if (data.settlement_account_id !== null) {
+-      const settlementAccount = ctx.db.prepare(
++      const settlementAccount = await ctx.db.queryOne<AccountRow>(
+         'SELECT * FROM accounts WHERE id = ? AND user_id = ? AND is_active = 1',
+-      ).get(data.settlement_account_id, ctx.user!.id) as AccountRow | undefined;
++        [data.settlement_account_id, ctx.user!.id],
++      );
+       if (!settlementAccount) {
+         throw new AppError('ACCOUNT_NOT_FOUND', '找不到交割帳戶，請先用 list_accounts 確認可用帳戶', 404);
+       }
+@@ -77,9 +79,9 @@ export const PUT = withMiddleware(async (request, ctx, routeCtx?: RouteContext)
+   values.push(now);
+   values.push(accountId);
+ 
+-  ctx.db.prepare(`UPDATE accounts SET ${sets.join(', ')} WHERE id = ?`).run(...values);
++  await ctx.db.exec(`UPDATE accounts SET ${sets.join(', ')} WHERE id = ?`, values);
+ 
+-  const updated = ctx.db.prepare('SELECT * FROM accounts WHERE id = ?').get(accountId) as AccountRow;
++  const updated = (await ctx.db.queryOne<AccountRow>('SELECT * FROM accounts WHERE id = ?', [accountId]))!;
+   return NextResponse.json(updated);
+ });
+ 
+@@ -92,34 +94,38 @@ export const DELETE = withMiddleware(async (_request, ctx, routeCtx?: RouteConte
+   if (Number.isNaN(accountId) || accountId <= 0) {
+     throw new AppError('VALIDATION_ERROR', '無效的 ID', 400);
+   }
+-  const account = getAccountOrThrow(ctx, accountId);
++  const account = await getAccountOrThrow(ctx, accountId);
+ 
+   // DATA-3: 前置完整性檢查，避免現金消失 / 交割懸空
+   if (account.balance !== 0) {
+     throw new AppError('ACCOUNT_HAS_BALANCE', '帳戶仍有餘額，請先轉清後再停用', 409);
+   }
+-  const activeHolding = ctx.db.prepare(
++  const activeHolding = await ctx.db.queryOne(
+     'SELECT 1 FROM holdings WHERE account_id = ? AND is_active = 1 LIMIT 1',
+-  ).get(accountId);
++    [accountId],
++  );
+   if (activeHolding) {
+     throw new AppError('ACCOUNT_HAS_HOLDINGS', '帳戶仍有持倉，請先清空持倉再停用', 409);
+   }
+-  const referenced = ctx.db.prepare(
++  const referenced = await ctx.db.queryOne(
+     'SELECT 1 FROM accounts WHERE settlement_account_id = ? AND is_active = 1 LIMIT 1',
+-  ).get(accountId);
++    [accountId],
++  );
+   if (referenced) {
+     throw new AppError('ACCOUNT_IS_SETTLEMENT', '帳戶被其他帳戶設為交割帳戶，請先解除引用', 409);
+   }
+ 
+   const now = Math.floor(Date.now() / 1000);
+-  ctx.db.prepare('UPDATE accounts SET is_active = 0, updated_at = ? WHERE id = ?').run(now, accountId);
++  await ctx.db.exec('UPDATE accounts SET is_active = 0, updated_at = ? WHERE id = ?', [now, accountId]);
+ 
+   // Clear default_account if this was the default
+   // getAccountOrThrow 已確認 ctx.user 存在
+   const user = ctx.user!;
+   if (user.default_account === accountId) {
+-    ctx.db.prepare('UPDATE users SET default_account = NULL, updated_at = ? WHERE id = ?')
+-      .run(now, user.id);
++    await ctx.db.exec(
++      'UPDATE users SET default_account = NULL, updated_at = ? WHERE id = ?',
++      [now, user.id],
++    );
+   }
+ 
+   return NextResponse.json({ success: true });
+diff --git a/backend/app/api/moneybook/accounts/route.ts b/backend/app/api/moneybook/accounts/route.ts
+index fbf7d7d..e40c3b0 100644
+--- a/backend/app/api/moneybook/accounts/route.ts
++++ b/backend/app/api/moneybook/accounts/route.ts
+@@ -27,7 +27,7 @@ export const GET = withMiddleware(async (request, ctx) => {
+ 
+   sql += ' ORDER BY sort_order ASC';
+ 
+-  const accounts = ctx.db.prepare(sql).all(...params) as AccountRow[];
++  const accounts = await ctx.db.queryAll<AccountRow>(sql, params);
+   return NextResponse.json(accounts);
+ });
+ 
+@@ -41,29 +41,32 @@ export const POST = withMiddleware(async (request, ctx) => {
+   const now = Math.floor(Date.now() / 1000);
+ 
+   if (data.settlement_account_id) {
+-    const settlementAccount = ctx.db.prepare(
++    const settlementAccount = await ctx.db.queryOne<AccountRow>(
+       'SELECT * FROM accounts WHERE id = ? AND user_id = ? AND is_active = 1',
+-    ).get(data.settlement_account_id, ctx.user.id) as AccountRow | undefined;
++      [data.settlement_account_id, ctx.user.id],
++    );
+     if (!settlementAccount) {
+       throw new AppError('ACCOUNT_NOT_FOUND', '找不到交割帳戶，請先用 list_accounts 確認可用帳戶', 404);
+     }
+   }
+ 
+-  const result = ctx.db.prepare(`
++  const account = (await ctx.db.queryOne<AccountRow>(`
+     INSERT INTO accounts (user_id, owner_id, is_shared, name, type, balance, initial_balance, icon, settlement_account_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+-  `).run(
++    RETURNING *
++  `, [
+     ctx.user.id, ctx.user.id, data.is_shared, data.name, data.type,
+     data.initial_balance, data.initial_balance, data.icon ?? null,
+     data.settlement_account_id ?? null, now, now,
+-  );
++  ]))!;
+ 
+   // Auto-set default_account if null
+   if (ctx.user.default_account === null) {
+-    ctx.db.prepare('UPDATE users SET default_account = ?, updated_at = ? WHERE id = ?')
+-      .run(result.lastInsertRowid, now, ctx.user.id);
++    await ctx.db.exec(
++      'UPDATE users SET default_account = ?, updated_at = ? WHERE id = ?',
++      [account.id, now, ctx.user.id],
++    );
+   }
+ 
+-  const account = ctx.db.prepare('SELECT * FROM accounts WHERE id = ?').get(result.lastInsertRowid) as AccountRow;
+   return NextResponse.json(account, { status: 201 });
+ });
+diff --git a/backend/tests/routes/accounts.test.ts b/backend/tests/routes/accounts.test.ts
+index 3edd7a8..3b96ebc 100644
+--- a/backend/tests/routes/accounts.test.ts
++++ b/backend/tests/routes/accounts.test.ts
+@@ -1,13 +1,11 @@
+-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
++import { describe, it, expect, vi, beforeEach } from 'vitest';
+ import { resetRateLimitStore } from '@/lib/middleware/rate-limit';
+ import { NextRequest } from 'next/server';
+-import Database from 'better-sqlite3';
+-import { applySchema } from '@/lib/db/schema';
+-import { applySeed } from '@/lib/db/seed';
+-import { createTestUser, createTestAccount, createTestInvestmentAccount } from '../helpers';
++import { createTestDb, createTestUser, createTestAccount, createTestInvestmentAccount } from '../helpers';
++import type { Db } from '@/lib/db/pg';
+ import type { UserRow } from '@/lib/types';
+ 
+-let testDb: Database.Database;
++let testDb: Db;
+ 
+ vi.mock('@/lib/db', () => ({
+   getDb: () => testDb,
+@@ -19,18 +17,11 @@ const detailModule = await import('@/app/api/moneybook/accounts/[id]/route');
+ describe('/api/moneybook/accounts', () => {
+   let user: UserRow;
+ 
+-  beforeEach(() => {
+-    testDb = new Database(':memory:');
+-    testDb.pragma('foreign_keys = ON');
+-    applySchema(testDb);
+-    applySeed(testDb);
++  beforeEach(async () => {
++    testDb = await createTestDb();
+     resetRateLimitStore();
+     vi.stubEnv('API_KEY', 'test-key');
+-    user = createTestUser(testDb, 'telegram:12345', 'Frank');
+-  });
+-
+-  afterEach(() => {
+-    testDb.close();
++    user = await createTestUser(testDb, 'telegram:12345', 'Frank');
+   });
+ 
+   describe('GET /accounts', () => {
+@@ -45,8 +36,8 @@ describe('/api/moneybook/accounts', () => {
+     });
+ 
+     it('should return user accounts', async () => {
+-      createTestAccount(testDb, user.id, { name: '現金' });
+-      createTestAccount(testDb, user.id, { name: '銀行', type: 'bank' });
++      await createTestAccount(testDb, user.id, { name: '現金' });
++      await createTestAccount(testDb, user.id, { name: '銀行', type: 'bank' });
+       const request = new NextRequest('http://localhost:3000/api/moneybook/accounts', {
+         headers: { 'X-API-Key': 'test-key', 'X-External-Id': 'telegram:12345' },
+       });
+@@ -57,8 +48,8 @@ describe('/api/moneybook/accounts', () => {
+     });
+ 
+     it('should filter by type', async () => {
+-      createTestAccount(testDb, user.id, { name: '現金', type: 'cash' });
+-      createTestAccount(testDb, user.id, { name: '銀行', type: 'bank' });
++      await createTestAccount(testDb, user.id, { name: '現金', type: 'cash' });
++      await createTestAccount(testDb, user.id, { name: '銀行', type: 'bank' });
+       const request = new NextRequest('http://localhost:3000/api/moneybook/accounts?type=cash', {
+         headers: { 'X-API-Key': 'test-key', 'X-External-Id': 'telegram:12345' },
+       });
+@@ -69,7 +60,7 @@ describe('/api/moneybook/accounts', () => {
+     });
+ 
+     it('should not return inactive accounts', async () => {
+-      createTestAccount(testDb, user.id, { name: '停用', is_active: 0 });
++      await createTestAccount(testDb, user.id, { name: '停用', is_active: 0 });
+       const request = new NextRequest('http://localhost:3000/api/moneybook/accounts', {
+         headers: { 'X-API-Key': 'test-key', 'X-External-Id': 'telegram:12345' },
+       });
+@@ -125,8 +116,8 @@ describe('/api/moneybook/accounts', () => {
+         body: JSON.stringify({ name: '現金', type: 'cash' }),
+       });
+       await listModule.POST(request);
+-      const updatedUser = testDb.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as UserRow;
+-      expect(updatedUser.default_account).not.toBeNull();
++      const updatedUser = await testDb.queryOne<UserRow>('SELECT * FROM users WHERE id = ?', [user.id]);
++      expect(updatedUser!.default_account).not.toBeNull();
+     });
+ 
+     it('should return 400 for invalid type', async () => {
+@@ -180,7 +171,7 @@ describe('/api/moneybook/accounts', () => {
+ 
+   describe('PUT /accounts/:id', () => {
+     it('should update account name', async () => {
+-      const account = createTestAccount(testDb, user.id, { name: '舊名稱' });
++      const account = await createTestAccount(testDb, user.id, { name: '舊名稱' });
+       const request = new NextRequest(`http://localhost:3000/api/moneybook/accounts/${account.id}`, {
+         method: 'PUT',
+         headers: {
+@@ -211,8 +202,8 @@ describe('/api/moneybook/accounts', () => {
+     });
+ 
+     it('should return 403 for account owned by another user', async () => {
+-      const otherUser = createTestUser(testDb, 'telegram:99999', 'Other');
+-      const account = createTestAccount(testDb, otherUser.id, { name: '別人的帳戶' });
++      const otherUser = await createTestUser(testDb, 'telegram:99999', 'Other');
++      const account = await createTestAccount(testDb, otherUser.id, { name: '別人的帳戶' });
+       const request = new NextRequest(`http://localhost:3000/api/moneybook/accounts/${account.id}`, {
+         method: 'PUT',
+         headers: {
+@@ -229,7 +220,7 @@ describe('/api/moneybook/accounts', () => {
+ 
+   describe('DELETE /accounts/:id', () => {
+     it('should soft-delete account', async () => {
+-      const account = createTestAccount(testDb, user.id, { name: '要刪的' });
++      const account = await createTestAccount(testDb, user.id, { name: '要刪的' });
+       const request = new NextRequest(`http://localhost:3000/api/moneybook/accounts/${account.id}`, {
+         method: 'DELETE',
+         headers: { 'X-API-Key': 'test-key', 'X-External-Id': 'telegram:12345' },
+@@ -239,13 +230,13 @@ describe('/api/moneybook/accounts', () => {
+       expect(response.status).toBe(200);
+       expect(body.success).toBe(true);
+ 
+-      const dbAccount = testDb.prepare('SELECT is_active FROM accounts WHERE id = ?').get(account.id) as { is_active: number };
+-      expect(dbAccount.is_active).toBe(0);
++      const dbAccount = await testDb.queryOne<{ is_active: number }>('SELECT is_active FROM accounts WHERE id = ?', [account.id]);
++      expect(dbAccount!.is_active).toBe(0);
+     });
+ 
+     it('should clear default_account when deleting default', async () => {
+-      const account = createTestAccount(testDb, user.id);
+-      testDb.prepare('UPDATE users SET default_account = ? WHERE id = ?').run(account.id, user.id);
++      const account = await createTestAccount(testDb, user.id);
++      await testDb.exec('UPDATE users SET default_account = ? WHERE id = ?', [account.id, user.id]);
+ 
+       const request = new NextRequest(`http://localhost:3000/api/moneybook/accounts/${account.id}`, {
+         method: 'DELETE',
+@@ -253,14 +244,14 @@ describe('/api/moneybook/accounts', () => {
+       });
+       await detailModule.DELETE(request, { params: Promise.resolve({ id: String(account.id) }) });
+ 
+-      const updatedUser = testDb.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as UserRow;
+-      expect(updatedUser.default_account).toBeNull();
++      const updatedUser = await testDb.queryOne<UserRow>('SELECT * FROM users WHERE id = ?', [user.id]);
++      expect(updatedUser!.default_account).toBeNull();
+     });
+   });
+ 
+   describe('DELETE /accounts 前置檢查（DATA-3）', () => {
+     it('餘額不為零 → 409 ACCOUNT_HAS_BALANCE', async () => {
+-      const acc = createTestAccount(testDb, user.id, { name: '有錢', balance: 5000 });
++      const acc = await createTestAccount(testDb, user.id, { name: '有錢', balance: 5000 });
+       const request = new NextRequest(`http://localhost:3000/api/moneybook/accounts/${acc.id}`, {
+         method: 'DELETE',
+         headers: { 'X-API-Key': 'test-key', 'X-External-Id': 'telegram:12345' },
+@@ -272,12 +263,13 @@ describe('/api/moneybook/accounts', () => {
+     });
+ 
+     it('帳戶下有 active 持倉 → 409 ACCOUNT_HAS_HOLDINGS', async () => {
+-      const acc = createTestInvestmentAccount(testDb, user.id, { name: '券商戶' });
++      const acc = await createTestInvestmentAccount(testDb, user.id, { name: '券商戶' });
+       const now = Math.floor(Date.now() / 1000);
+-      testDb.prepare(
++      await testDb.exec(
+         `INSERT INTO holdings (user_id, account_id, symbol, name, market, currency, shares, avg_cost, is_active, created_at, updated_at)
+          VALUES (?, ?, 'TSLA', 'Tesla', 'US', 'USD', 5, 20000, 1, ?, ?)`,
+-      ).run(user.id, acc.id, now, now);
++        [user.id, acc.id, now, now],
++      );
+       const request = new NextRequest(`http://localhost:3000/api/moneybook/accounts/${acc.id}`, {
+         method: 'DELETE',
+         headers: { 'X-API-Key': 'test-key', 'X-External-Id': 'telegram:12345' },
+@@ -289,8 +281,8 @@ describe('/api/moneybook/accounts', () => {
+     });
+ 
+     it('被其他帳戶當交割戶引用 → 409 ACCOUNT_IS_SETTLEMENT', async () => {
+-      const bank = createTestAccount(testDb, user.id, { name: '交割戶', type: 'bank' });
+-      createTestInvestmentAccount(testDb, user.id, { name: '券商', settlement_account_id: bank.id });
++      const bank = await createTestAccount(testDb, user.id, { name: '交割戶', type: 'bank' });
++      await createTestInvestmentAccount(testDb, user.id, { name: '券商', settlement_account_id: bank.id });
+       const request = new NextRequest(`http://localhost:3000/api/moneybook/accounts/${bank.id}`, {
+         method: 'DELETE',
+         headers: { 'X-API-Key': 'test-key', 'X-External-Id': 'telegram:12345' },
+@@ -302,15 +294,15 @@ describe('/api/moneybook/accounts', () => {
+     });
+ 
+     it('餘額為零且無引用 → 正常軟刪 200', async () => {
+-      const acc = createTestAccount(testDb, user.id, { name: '空帳戶', balance: 0 });
++      const acc = await createTestAccount(testDb, user.id, { name: '空帳戶', balance: 0 });
+       const request = new NextRequest(`http://localhost:3000/api/moneybook/accounts/${acc.id}`, {
+         method: 'DELETE',
+         headers: { 'X-API-Key': 'test-key', 'X-External-Id': 'telegram:12345' },
+       });
+       const response = await detailModule.DELETE(request, { params: Promise.resolve({ id: String(acc.id) }) });
+       expect(response.status).toBe(200);
+-      const row = testDb.prepare('SELECT is_active FROM accounts WHERE id = ?').get(acc.id) as { is_active: number };
+-      expect(row.is_active).toBe(0);
++      const row = await testDb.queryOne<{ is_active: number }>('SELECT is_active FROM accounts WHERE id = ?', [acc.id]);
++      expect(row!.is_active).toBe(0);
+     });
+   });
+ 

@@ -1,0 +1,506 @@
+=== REQUIREMENTS (what this change is supposed to do) ===
+### Task 4: 冪等佔位改為單語句原子操作
+
+Implements: `postgres-migration.md` #R3, #R4
+
+Files:
+- Modify: `backend/lib/middleware/idempotency.ts`（整檔重寫）
+- Test: `backend/tests/middleware/idempotency.test.ts`（整檔重寫）
+- Test: `backend/tests/middleware/idempotency-release.test.ts`（改 async）
+- Test: `backend/tests/db/idempotency-schema.test.ts`（整檔重寫）
+
+Interfaces:
+- Consumes: Task 1 的 `Db`、Task 3 的 `createTestDb` / `createTestUser`
+- Produces: `lib/middleware/idempotency.ts` 匯出
+  - `const EXPIRY_SECONDS: number`（值為 300）
+  - `function hashBody(text: string): string`
+  - `type IdempotencyClaim = { type: 'claimed' } | { type: 'replay'; response: string; status: number } | { type: 'in_progress' } | { type: 'conflict' }`
+  - `async function claimIdempotency(db: Db, userId: number, key: string, bodyHash: string): Promise<IdempotencyClaim>`
+  - `async function finalizeIdempotency(db: Db, userId: number, key: string, response: string, status: number): Promise<void>`
+  - `async function releaseIdempotency(db: Db, userId: number, key: string): Promise<void>`
+  - `async function cleanExpiredKeys(db: Db): Promise<void>`
+=== CHANGE UNDER REVIEW ===
+diff --git a/backend/lib/middleware/idempotency.ts b/backend/lib/middleware/idempotency.ts
+index 4f333b7..53c462d 100644
+--- a/backend/lib/middleware/idempotency.ts
++++ b/backend/lib/middleware/idempotency.ts
+@@ -1,5 +1,5 @@
+-import type Database from 'better-sqlite3';
+ import { createHash } from 'crypto';
++import type { Db } from '@/lib/db/pg';
+ import type { IdempotencyKeyRow } from '@/lib/types';
+ 
+ export const EXPIRY_SECONDS = 5 * 60; // 冪等窗：分鐘級，擋逾時重試/雙觸發
+@@ -14,80 +14,83 @@ export type IdempotencyClaim =
+   | { type: 'in_progress' }
+   | { type: 'conflict' };
+ 
+-function insertPlaceholder(
+-  db: Database.Database,
+-  userId: number,
+-  key: string,
+-  bodyHash: string,
+-): void {
+-  const now = Math.floor(Date.now() / 1000);
+-  db.prepare(
+-    "INSERT INTO idempotency_keys (user_id, key, body_hash, response, status, created_at) VALUES (?, ?, ?, '', 0, ?)",
+-  ).run(userId, key, bodyHash, now);
+-}
+-
+ /**
+- * 原子佔位：先嘗試 INSERT 佔位列（PK=(user_id,key)）。
+- * - 成功 → claimed（呼叫端繼續執行 handler）
+- * - PK 衝突 → 依既有列狀態回 replay / in_progress / conflict
++ * 原子佔位：單一條件式 upsert 同時完成「建立佔位」「判定過期」「接管過期列」。
++ *
++ * - 無既有列 → INSERT 成功，RETURNING 回新列 → claimed
++ * - 既有列已過期 → DO UPDATE 的 WHERE 通過，接管該列並回傳 → claimed
++ * - 既有列仍在冪等窗內 → DO UPDATE 的 WHERE 不通過，**回 0 列** → 再 SELECT 判定
+  *
+- * 部署不變量（重要）：本函式的原子性靠兩層各司其職，缺一不可——
+- * (1) 單一語句的原子性由 SQLite 保證（同進程或跨進程皆然）；
+- * (2) 多語句序列 INSERT→catch→SELECT→DELETE→INSERT 之間不被插斷，靠「單一 Node
+- *     進程、單一 better-sqlite3 連線」＋本函式全程同步無 await 的 run-to-completion
+- *     語意（此層僅在同進程單連線下成立）。
+- * 兩者合起來杜絕 check-then-act 競態。
+- * 若未來改為多進程/多容器（PM2 cluster、docker-compose replicas>1）共用同一 SQLite
+- * 檔，過期刪除路徑會出現跨連線 race（B 的 DELETE 可能誤刪 A 剛寫的佔位列）——屆時
+- * 必須用 `db.transaction(fn).immediate()`（BEGIN IMMEDIATE，先搶寫鎖才會套用
+- * busy_timeout；預設 deferred BEGIN 的 write-after-read 會直接丟 SQLITE_BUSY）重寫本函式再上線。
++ * 為什麼不能沿用舊的 INSERT→catch→SELECT→DELETE→INSERT 序列：舊實作的原子性建立在
++ * 「單一進程、單一 better-sqlite3 連線、全程同步無 await 的 run-to-completion」三個前提上，
++ * 換成連線池 + async 後三個前提全部消失，會出現 check-then-act 競態導致同筆帳記兩次。
++ *
++ * 後續 SELECT 無競態：能被讀到的列必然未過期，未過期就不可能被任何人接管（接管條件是過期）。
++ * 唯一例外是它剛好被 releaseIdempotency 刪除（handler 出錯的釋放路徑），此時 SELECT 讀不到，
++ * 重跑一次 claim 即可，最多一輪。
++ *
++ * 本實作不再依賴單進程單連線，故未來多容器或 replica > 1 是開得起來的。
+  */
+-export function claimIdempotency(
+-  db: Database.Database,
++export async function claimIdempotency(
++  db: Db,
+   userId: number,
+   key: string,
+   bodyHash: string,
+-): IdempotencyClaim {
++  retried = false,
++): Promise<IdempotencyClaim> {
+   const now = Math.floor(Date.now() / 1000);
+-  try {
+-    insertPlaceholder(db, userId, key, bodyHash);
+-    return { type: 'claimed' };
+-  } catch (e) {
+-    const existing = db
+-      .prepare('SELECT * FROM idempotency_keys WHERE user_id = ? AND key = ?')
+-      .get(userId, key) as IdempotencyKeyRow | undefined;
+ 
+-    if (!existing) throw e; // 非 PK 衝突造成的錯誤，向上拋
++  const claimed = await db.queryOne<IdempotencyKeyRow>(
++    `INSERT INTO idempotency_keys (user_id, key, body_hash, response, status, created_at)
++     VALUES (?, ?, ?, '', 0, ?)
++     ON CONFLICT (user_id, key) DO UPDATE
++       SET body_hash  = EXCLUDED.body_hash,
++           response   = '',
++           status     = 0,
++           created_at = EXCLUDED.created_at
++       WHERE idempotency_keys.created_at <= ?
++     RETURNING *`,
++    [userId, key, bodyHash, now, now - EXPIRY_SECONDS],
++  );
+ 
+-    if (now - existing.created_at > EXPIRY_SECONDS) {
+-      db.prepare('DELETE FROM idempotency_keys WHERE user_id = ? AND key = ?').run(userId, key);
+-      insertPlaceholder(db, userId, key, bodyHash);
+-      return { type: 'claimed' };
+-    }
++  if (claimed) return { type: 'claimed' };
+ 
+-    if (existing.body_hash !== bodyHash) return { type: 'conflict' };
+-    if (existing.status === 0) return { type: 'in_progress' };
+-    return { type: 'replay', response: existing.response, status: existing.status };
++  const existing = await db.queryOne<IdempotencyKeyRow>(
++    'SELECT * FROM idempotency_keys WHERE user_id = ? AND key = ?',
++    [userId, key],
++  );
++
++  if (!existing) {
++    // 佔位在本次 upsert 與 SELECT 之間被釋放，重跑一次即可（最多一輪）
++    if (retried) {
++      throw new Error('冪等佔位重試後仍無法取得，請重送請求');
++    }
++    return claimIdempotency(db, userId, key, bodyHash, true);
+   }
++
++  if (existing.body_hash !== bodyHash) return { type: 'conflict' };
++  if (existing.status === 0) return { type: 'in_progress' };
++  return { type: 'replay', response: existing.response, status: existing.status };
+ }
+ 
+-export function finalizeIdempotency(
+-  db: Database.Database,
++export async function finalizeIdempotency(
++  db: Db,
+   userId: number,
+   key: string,
+   response: string,
+   status: number,
+-): void {
+-  db.prepare(
++): Promise<void> {
++  await db.exec(
+     'UPDATE idempotency_keys SET response = ?, status = ? WHERE user_id = ? AND key = ?',
+-  ).run(response, status, userId, key);
++    [response, status, userId, key],
++  );
+ }
+ 
+-export function releaseIdempotency(db: Database.Database, userId: number, key: string): void {
+-  db.prepare('DELETE FROM idempotency_keys WHERE user_id = ? AND key = ?').run(userId, key);
++export async function releaseIdempotency(db: Db, userId: number, key: string): Promise<void> {
++  await db.exec('DELETE FROM idempotency_keys WHERE user_id = ? AND key = ?', [userId, key]);
+ }
+ 
+-export function cleanExpiredKeys(db: Database.Database): void {
++export async function cleanExpiredKeys(db: Db): Promise<void> {
+   const cutoff = Math.floor(Date.now() / 1000) - EXPIRY_SECONDS;
+-  db.prepare('DELETE FROM idempotency_keys WHERE created_at < ?').run(cutoff);
++  await db.exec('DELETE FROM idempotency_keys WHERE created_at < ?', [cutoff]);
+ }
+diff --git a/backend/lib/middleware/index.ts b/backend/lib/middleware/index.ts
+index 17b8f4e..8486a4e 100644
+--- a/backend/lib/middleware/index.ts
++++ b/backend/lib/middleware/index.ts
+@@ -49,7 +49,7 @@ export function withMiddleware<TRouteCtx = unknown>(
+       if (useIdempotency) {
+         const bodyText = await request.clone().text();
+         const bodyHash = hashBody(bodyText);
+-        const claim = claimIdempotency(db, user!.id, idempotencyKey!, bodyHash);
++        const claim = await claimIdempotency(db, user!.id, idempotencyKey!, bodyHash);
+         if (claim.type === 'replay') {
+           logger.info({ requestId, method, path, actor: actorExternalId, status: claim.status, ms: Date.now() - startedAt, replay: true });
+           return NextResponse.json(JSON.parse(claim.response), { status: claim.status });
+@@ -69,22 +69,22 @@ export function withMiddleware<TRouteCtx = unknown>(
+       try {
+         response = await handler(request, ctx, routeCtx);
+       } catch (err) {
+-        if (useIdempotency) releaseIdempotency(db, user!.id, idempotencyKey!);
++        if (useIdempotency) await releaseIdempotency(db, user!.id, idempotencyKey!);
+         throw err;
+       }
+ 
+       if (useIdempotency) {
+         if (response.ok) {
+           const body = await response.clone().text();
+-          finalizeIdempotency(db, user!.id, idempotencyKey!, body, response.status);
++          await finalizeIdempotency(db, user!.id, idempotencyKey!, body, response.status);
+         } else {
+           // 失敗回應不快取，釋放佔位讓後續可重試
+-          releaseIdempotency(db, user!.id, idempotencyKey!);
++          await releaseIdempotency(db, user!.id, idempotencyKey!);
+         }
+       }
+ 
+       if (Math.random() < 0.01) {
+-        cleanExpiredKeys(db);
++        await cleanExpiredKeys(db);
+       }
+ 
+       const durationMs = Date.now() - startedAt;
+diff --git a/backend/tests/db/idempotency-schema.test.ts b/backend/tests/db/idempotency-schema.test.ts
+index fe739e2..1ef9419 100644
+--- a/backend/tests/db/idempotency-schema.test.ts
++++ b/backend/tests/db/idempotency-schema.test.ts
+@@ -1,37 +1,35 @@
+-import { describe, it, expect } from 'vitest';
+-import Database from 'better-sqlite3';
+-import { applySchema } from '@/lib/db/schema';
++import { describe, it, expect, beforeEach } from 'vitest';
++import { createTestDb, createTestUser } from '../helpers';
++import type { Db } from '@/lib/db/pg';
++
++let db: Db;
++
++beforeEach(async () => {
++  db = await createTestDb();
++});
+ 
+ describe('idempotency_keys schema', () => {
+-  it('新表含 user_id / body_hash / status，主鍵為 (user_id, key)', () => {
+-    const db = new Database(':memory:');
+-    applySchema(db);
+-    const cols = db.prepare('PRAGMA table_info(idempotency_keys)').all() as {
+-      name: string;
+-      pk: number;
+-    }[];
+-    const names = cols.map((c) => c.name).sort();
+-    expect(names).toEqual(['body_hash', 'created_at', 'key', 'response', 'status', 'user_id']);
+-    const pkCols = cols.filter((c) => c.pk > 0).map((c) => c.name).sort();
+-    expect(pkCols).toEqual(['key', 'user_id']);
++  it('主鍵為 (user_id, key)：同 user 同 key 不得重複、不同 user 可同 key', async () => {
++    const a = await createTestUser(db, 'discord:a', 'A');
++    const b = await createTestUser(db, 'discord:b', 'B');
++    const now = Math.floor(Date.now() / 1000);
++    const insert = (userId: number) => db.exec(
++      "INSERT INTO idempotency_keys (user_id, key, body_hash, response, status, created_at) VALUES (?, ?, 'h', '', 0, ?)",
++      [userId, 'same-key', now],
++    );
++    await insert(a.id);
++    await insert(b.id);
++    await expect(insert(a.id)).rejects.toThrow();
+   });
+ 
+-  it('受控 migration：舊 shape（無 user_id）會被重建為新 shape', () => {
+-    const db = new Database(':memory:');
+-    // 模擬舊表
+-    db.exec(
+-      'CREATE TABLE idempotency_keys (key TEXT PRIMARY KEY, response TEXT NOT NULL, created_at INTEGER NOT NULL)',
+-    );
+-    db.prepare('INSERT INTO idempotency_keys (key, response, created_at) VALUES (?, ?, ?)').run(
+-      'old',
+-      '{}',
+-      1,
++  it('具備 body_hash / status 欄位', async () => {
++    const cols = await db.queryAll<{ column_name: string }>(
++      `SELECT column_name FROM information_schema.columns
++       WHERE table_name = 'idempotency_keys' AND table_schema = current_schema()`,
+     );
+-    applySchema(db);
+-    const cols = db.prepare('PRAGMA table_info(idempotency_keys)').all() as { name: string }[];
+-    expect(cols.some((c) => c.name === 'user_id')).toBe(true);
+-    // 舊的暫態 key 可被清掉（ephemeral，可接受）
+-    const count = db.prepare('SELECT COUNT(*) AS n FROM idempotency_keys').get() as { n: number };
+-    expect(count.n).toBe(0);
++    const names = cols.map((c) => c.column_name);
++    for (const c of ['user_id', 'key', 'body_hash', 'response', 'status', 'created_at']) {
++      expect(names).toContain(c);
++    }
+   });
+ });
+diff --git a/backend/tests/middleware/idempotency-release.test.ts b/backend/tests/middleware/idempotency-release.test.ts
+index aa66b87..aa6bf9e 100644
+--- a/backend/tests/middleware/idempotency-release.test.ts
++++ b/backend/tests/middleware/idempotency-release.test.ts
+@@ -1,13 +1,24 @@
+ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+-import Database from 'better-sqlite3';
+-import { applySchema } from '@/lib/db/schema';
+-import { applySeed } from '@/lib/db/seed';
++import { createTestDb, createTestUser } from '../helpers';
+ import { resetRateLimitStore } from '@/lib/middleware/rate-limit';
+-import { createTestUser } from '../helpers';
+ import { NextRequest, NextResponse } from 'next/server';
++import type { Db } from '@/lib/db/pg';
+ 
+-let testDb: Database.Database;
++let testDb: Db;
++let userId: number;
+ vi.mock('@/lib/db', () => ({ getDb: () => testDb }));
++// lib/middleware/external-id.ts 與 lib/audit.ts 尚未轉換為 pg 版 Db（排在 Task 5），
++// 兩者仍呼叫已移除的 better-sqlite3 同步 API。本檔的受測對象是 idempotency 佔位/釋放
++// 邏輯（走真正的 withMiddleware + 真正的 Postgres），與這兩者無關，故就地 mock 掉，
++// 避免測試被尚未轉換的旁枝依賴卡住。
++vi.mock('@/lib/middleware/external-id', () => ({
++  parseExternalId: (request: NextRequest) => {
++    const externalId = request.headers.get('x-external-id');
++    if (!externalId) return null;
++    return { id: userId, external_id: externalId, name: 'Frank', default_account: null, created_at: 0, updated_at: 0 };
++  },
++}));
++vi.mock('@/lib/audit', () => ({ writeAudit: () => {} }));
+ 
+ // 動態 import，確保 mock 生效後才載入 middleware
+ async function loadMiddleware() {
+@@ -29,21 +40,15 @@ function postReq(key: string, externalId = 'discord:frank') {
+ }
+ 
+ describe('withMiddleware：!response.ok 失敗回應釋放佔位（TEST-1）', () => {
+-  let userId: number;
+-
+-  beforeEach(() => {
+-    testDb = new Database(':memory:');
+-    testDb.pragma('foreign_keys = ON');
+-    applySchema(testDb);
+-    applySeed(testDb);
++  beforeEach(async () => {
++    testDb = await createTestDb();
+     resetRateLimitStore();
+     vi.stubEnv('API_KEY', 'test-key');
+-    userId = createTestUser(testDb, 'discord:frank', 'Frank').id;
++    userId = (await createTestUser(testDb, 'discord:frank', 'Frank')).id;
+   });
+ 
+   afterEach(() => {
+     vi.unstubAllEnvs();
+-    testDb.close();
+   });
+ 
+   it('handler 回非 2xx 但不 throw → 走 !response.ok 分支釋放佔位，不快取', async () => {
+@@ -60,10 +65,11 @@ describe('withMiddleware：!response.ok 失敗回應釋放佔位（TEST-1）', (
+     expect(callCount).toBe(1);
+ 
+     // 佔位已釋放（走 release 而非 finalize）：該 (user_id, key) 列數為 0
+-    const left = testDb
+-      .prepare('SELECT COUNT(*) AS n FROM idempotency_keys WHERE user_id = ? AND key = ?')
+-      .get(userId, 'rel') as { n: number };
+-    expect(left.n).toBe(0);
++    const left = await testDb.queryOne<{ n: number }>(
++      'SELECT COUNT(*) AS n FROM idempotency_keys WHERE user_id = ? AND key = ?',
++      [userId, 'rel'],
++    );
++    expect(left!.n).toBe(0);
+ 
+     // 鑑別力：同 key 第二次仍會重新處理（handler 再次執行），而非拿到 replay 的快取 400
+     const second = await handler(postReq('rel'));
+diff --git a/backend/tests/middleware/idempotency.test.ts b/backend/tests/middleware/idempotency.test.ts
+index e0fbf03..d90578f 100644
+--- a/backend/tests/middleware/idempotency.test.ts
++++ b/backend/tests/middleware/idempotency.test.ts
+@@ -1,77 +1,95 @@
+ import { describe, it, expect, beforeEach } from 'vitest';
+-import Database from 'better-sqlite3';
++import { createTestDb, createTestUser } from '../helpers';
+ import {
+-  claimIdempotency,
+-  finalizeIdempotency,
+-  releaseIdempotency,
+-  cleanExpiredKeys,
+-  hashBody,
+-  EXPIRY_SECONDS,
++  claimIdempotency, finalizeIdempotency, releaseIdempotency,
++  cleanExpiredKeys, hashBody, EXPIRY_SECONDS,
+ } from '@/lib/middleware/idempotency';
+-import { applySchema } from '@/lib/db/schema';
++import type { Db } from '@/lib/db/pg';
+ 
+-describe('Idempotency (atomic claim)', () => {
+-  let db: Database.Database;
+-  beforeEach(() => {
+-    db = new Database(':memory:');
+-    applySchema(db);
+-  });
++let db: Db;
++let userId: number;
++
++beforeEach(async () => {
++  db = await createTestDb();
++  userId = (await createTestUser(db, 'discord:frank', 'Frank')).id;
++});
+ 
+-  it('首次 claim 回 claimed', () => {
+-    const r = claimIdempotency(db, 1, 'k1', hashBody('{"a":1}'));
++describe('claimIdempotency', () => {
++  it('首次佔位回 claimed', async () => {
++    const r = await claimIdempotency(db, userId, 'k1', hashBody('{}'));
+     expect(r.type).toBe('claimed');
+   });
+ 
+-  it('claim 後未 finalize，第二次同 key 回 in_progress', () => {
+-    claimIdempotency(db, 1, 'k1', hashBody('{"a":1}'));
+-    const r = claimIdempotency(db, 1, 'k1', hashBody('{"a":1}'));
++  it('同 key 同 body 但未完成 → in_progress', async () => {
++    await claimIdempotency(db, userId, 'k1', hashBody('{}'));
++    const r = await claimIdempotency(db, userId, 'k1', hashBody('{}'));
+     expect(r.type).toBe('in_progress');
+   });
+ 
+-  it('finalize 後同 key 同 body 回 replay（含 status）', () => {
+-    claimIdempotency(db, 1, 'k1', hashBody('{"a":1}'));
+-    finalizeIdempotency(db, 1, 'k1', JSON.stringify({ id: 9 }), 201);
+-    const r = claimIdempotency(db, 1, 'k1', hashBody('{"a":1}'));
+-    expect(r).toEqual({ type: 'replay', response: JSON.stringify({ id: 9 }), status: 201 });
++  it('同 key 同 body 已完成 → replay 並帶回原回應與狀態', async () => {
++    await claimIdempotency(db, userId, 'k1', hashBody('{}'));
++    await finalizeIdempotency(db, userId, 'k1', '{"ok":true}', 201);
++    const r = await claimIdempotency(db, userId, 'k1', hashBody('{}'));
++    expect(r.type).toBe('replay');
++    if (r.type === 'replay') {
++      expect(r.response).toBe('{"ok":true}');
++      expect(r.status).toBe(201);
++    }
+   });
+ 
+-  it('同 key 不同 body 回 conflict', () => {
+-    claimIdempotency(db, 1, 'k1', hashBody('{"a":1}'));
+-    finalizeIdempotency(db, 1, 'k1', '{}', 201);
+-    const r = claimIdempotency(db, 1, 'k1', hashBody('{"a":2}'));
++  it('同 key 不同 body → conflict', async () => {
++    await claimIdempotency(db, userId, 'k1', hashBody('{"a":1}'));
++    const r = await claimIdempotency(db, userId, 'k1', hashBody('{"a":2}'));
+     expect(r.type).toBe('conflict');
+   });
+ 
+-  it('不同 user 同 key 互相隔離', () => {
+-    claimIdempotency(db, 1, 'k1', hashBody('{"a":1}'));
+-    finalizeIdempotency(db, 1, 'k1', JSON.stringify({ owner: 'u1' }), 201);
+-    const r = claimIdempotency(db, 2, 'k1', hashBody('{"a":1}'));
+-    expect(r.type).toBe('claimed'); // user2 不受 user1 影響
++  it('過期佔位可被接管 → claimed', async () => {
++    await claimIdempotency(db, userId, 'k1', hashBody('{}'));
++    // 把佔位時間往回撥超過冪等窗
++    await db.exec(
++      'UPDATE idempotency_keys SET created_at = ? WHERE user_id = ? AND key = ?',
++      [Math.floor(Date.now() / 1000) - EXPIRY_SECONDS - 1, userId, 'k1'],
++    );
++    const r = await claimIdempotency(db, userId, 'k1', hashBody('{"different":true}'));
++    expect(r.type).toBe('claimed');
+   });
+ 
+-  it('release 後可重新 claim（失敗請求不卡住重試）', () => {
+-    claimIdempotency(db, 1, 'k1', hashBody('{"a":1}'));
+-    releaseIdempotency(db, 1, 'k1');
+-    const r = claimIdempotency(db, 1, 'k1', hashBody('{"a":1}'));
++  it('釋放後同 key 可重新取得佔位', async () => {
++    await claimIdempotency(db, userId, 'k1', hashBody('{}'));
++    await releaseIdempotency(db, userId, 'k1');
++    const r = await claimIdempotency(db, userId, 'k1', hashBody('{}'));
+     expect(r.type).toBe('claimed');
+   });
+ 
+-  it('過期 key 視為新 claim', () => {
+-    const stale = Math.floor(Date.now() / 1000) - EXPIRY_SECONDS - 10;
+-    db.prepare(
+-      'INSERT INTO idempotency_keys (user_id, key, body_hash, response, status, created_at) VALUES (?,?,?,?,?,?)',
+-    ).run(1, 'k1', hashBody('{"a":1}'), '{}', 201, stale);
+-    const r = claimIdempotency(db, 1, 'k1', hashBody('{"a":1}'));
++  it('跨使用者隔離：不同 user 用相同 key 互不影響', async () => {
++    const userB = await createTestUser(db, 'discord:bob', 'Bob');
++    await claimIdempotency(db, userId, 'shared', hashBody('{"a":1}'));
++    const r = await claimIdempotency(db, userB.id, 'shared', hashBody('{"a":2}'));
+     expect(r.type).toBe('claimed');
+   });
+ 
+-  it('cleanExpiredKeys 刪過期', () => {
+-    const stale = Math.floor(Date.now() / 1000) - EXPIRY_SECONDS - 10;
+-    db.prepare(
+-      'INSERT INTO idempotency_keys (user_id, key, body_hash, response, status, created_at) VALUES (?,?,?,?,?,?)',
+-    ).run(1, 'old', 'h', '{}', 201, stale);
+-    cleanExpiredKeys(db);
+-    const n = db.prepare('SELECT COUNT(*) AS n FROM idempotency_keys').get() as { n: number };
+-    expect(n.n).toBe(0);
++  it('併發相同 key 只有一個取得佔位', async () => {
++    const hash = hashBody('{}');
++    const results = await Promise.all([
++      claimIdempotency(db, userId, 'race', hash),
++      claimIdempotency(db, userId, 'race', hash),
++      claimIdempotency(db, userId, 'race', hash),
++    ]);
++    expect(results.filter((r) => r.type === 'claimed').length).toBe(1);
++    expect(results.filter((r) => r.type === 'in_progress').length).toBe(2);
++  });
++});
++
++describe('cleanExpiredKeys', () => {
++  it('刪除逾期列、保留窗內列', async () => {
++    await claimIdempotency(db, userId, 'old', hashBody('{}'));
++    await claimIdempotency(db, userId, 'new', hashBody('{}'));
++    await db.exec(
++      'UPDATE idempotency_keys SET created_at = ? WHERE user_id = ? AND key = ?',
++      [Math.floor(Date.now() / 1000) - EXPIRY_SECONDS - 10, userId, 'old'],
++    );
++    await cleanExpiredKeys(db);
++    const rows = await db.queryAll<{ key: string }>('SELECT key FROM idempotency_keys WHERE user_id = ?', [userId]);
++    expect(rows.map((r) => r.key)).toEqual(['new']);
+   });
+ });
