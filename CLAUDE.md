@@ -227,15 +227,30 @@ Before tagging:
 4. **Re-run the eval** if any agent prompt changed, and put the numbers in the changelog. Claims about review quality should be measured, not asserted.
 5. **Check the docs still match.** README (setup steps, command table, troubleshooting), both plugin READMEs, `docs/specs/`, and this file. A removed command or renamed env var touches more places than feels reasonable.
 
+**The two plugins have separate tag namespaces.** `gemini` keeps the bare `vX.Y.Z` line; `gemini-images` is tagged `gemini-images-vX.Y.Z`. Pick the namespace by which plugin you bumped — a release never covers both at once any more.
+
+| Plugin | Tag | Example |
+|--------|-----|---------|
+| `gemini` | `vX.Y.Z` | `v0.3.0` |
+| `gemini-images` | `gemini-images-vX.Y.Z` | `gemini-images-v0.2.1` |
+
+The bare line is not "the repo's version", even though it reads like one. `v0.1.0` and `v0.2.0` predate the split — `v0.2.0` was the agy migration, which really did ship both plugins at 0.2.0 — but every tag after it (`v0.2.1`, `v0.2.2`, `v0.3.0`) is a `gemini` release and says nothing about `gemini-images`. The namespaces exist because that drift already produced a collision: `gemini-images` reached 0.2.1 in September 2026, and `v0.2.1` was taken by a `gemini` release from July.
+
+`CHANGELOG.md` follows the same split — a `gemini-images` entry is headed `## [gemini-images 0.2.1]`, a `gemini` entry stays `## [0.3.0]`. Two plugins reaching the same version number is normal and must not produce two identical headings.
+
 Then tag and release:
 
 ```bash
-git tag -a v0.2.0 <commit> -m "v0.2.0 — <one-line summary>"
-git push origin v0.2.0
-gh release create v0.2.0 --notes-file <notes>   # only when the banner and docs are done
+git tag -a v0.3.0 <commit> -m "v0.3.0 — <one-line summary>"                 # gemini
+git push origin v0.3.0
+gh release create v0.3.0 --notes-file <notes>   # only when the banner and docs are done
+
+git tag -a gemini-images-v0.2.1 <commit> -m "gemini-images v0.2.1 — <one-line summary>"
+git push origin gemini-images-v0.2.1
+gh release create gemini-images-v0.2.1 --notes-file <notes>
 ```
 
-Tags are cheap and can be pushed as soon as a version lands on `master`. A GitHub Release is the announcement — hold it until the banner and docs are ready, since that is what people see first.
+Tags are cheap and can be pushed as soon as a version lands on `master`. A GitHub Release is the announcement — hold it until the banner and docs are ready, since that is what people see first. The banner states the `gemini` plugin's version, so a `gemini-images` release usually leaves it alone — check rather than assume.
 
 Record decisions as `D<n>` entries in `docs/specs/`, including the ones that get superseded — mark the old entry rather than deleting it. Several decisions in this repo were reversed once their premise expired (Pro-by-default, the quota fallback, the tool policy), and the reversals only make sense next to what they replaced.
 

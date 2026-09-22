@@ -2,9 +2,9 @@
 
 All notable changes to this project are documented here.
 
-Both plugins are versioned independently, but have moved together so far, so releases are tagged once for the repo (`v<version>`). See [CLAUDE.md](CLAUDE.md#versioning) for the bump rules.
+The two plugins are versioned and released independently. `gemini` uses the bare `vX.Y.Z` tags and plain `## [X.Y.Z]` headings below; `gemini-images` uses `gemini-images-vX.Y.Z` and `## [gemini-images X.Y.Z]`. They moved together up to `v0.2.0` (the agy migration shipped both at 0.2.0) and have diverged since, so a bare version here means `gemini` unless the heading says otherwise. See [CLAUDE.md](CLAUDE.md#releasing) for the tag rules and [Versioning](CLAUDE.md#versioning) for when to bump.
 
-## [0.2.1] — 2026-09-22
+## [gemini-images 0.2.1] — 2026-09-22
 
 `gemini-images` only. `doctor.sh`'s diagnostics had drifted from the runtime code they exist to verify — found while turning a historical commit into an eval fixture (`eval/ground-truth/doctor-agy-bin.md`), fixed here.
 
@@ -207,6 +207,9 @@ Initial open-source release.
 - **`gemini-images`** — `PreToolUse` hook on `Read` that resizes an image, describes it through Gemini, runs tesseract OCR in parallel, and hands Claude the text so the prompt cache survives.
 - promptfoo eval suite with LLM-as-judge rubrics over real-world diffs.
 
+[gemini-images 0.2.1]: https://github.com/haunchen/gemini-plugin-cc/releases/tag/gemini-images-v0.2.1
+[0.3.0]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.2.2...v0.3.0
+[0.2.2]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/haunchen/gemini-plugin-cc/releases/tag/v0.1.0

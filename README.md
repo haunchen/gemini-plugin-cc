@@ -180,7 +180,9 @@ gemini-plugin-cc/
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). `gemini` is at 0.2.2, `gemini-images` at 0.2.0; re-run `/gemini:setup` after upgrading `gemini` — prompt changes don't reach agy on their own, though from 0.2.1 the plugin tells you when they have drifted. 0.2.2 is the exception: it changes no prompts, so there is nothing to reinstall.
+See [CHANGELOG.md](CHANGELOG.md). `gemini` is at 0.3.0, `gemini-images` at 0.2.1. The two are versioned and released independently — `gemini` is tagged `vX.Y.Z`, `gemini-images` is tagged `gemini-images-vX.Y.Z`, so a bare version number refers to `gemini`.
+
+Re-run `/gemini:setup` after upgrading `gemini` — prompt changes don't reach agy on their own, though from 0.2.1 the plugin tells you when they have drifted. Not every release needs it: 0.2.2 and the `gemini-images` 0.2.1 fix change no prompts, so there is nothing to reinstall.
 
 ## License
 
