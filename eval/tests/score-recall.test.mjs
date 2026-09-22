@@ -78,6 +78,31 @@ test('readAssertions 跳過 assert-set 攤平後留下的聚合項（沒有 asse
   );
 });
 
+test('readAssertions 支援 results 本身就是陣列的形狀', () => {
+  // 寬容接受的第二種形狀：未經 Task 1 實測驗證，但仍應正確解析。
+  const json = {
+    results: [
+      {
+        response: { output: '## Review Summary\nsomething' },
+        gradingResult: {
+          componentResults: [{ pass: true, reason: 'ok', assertion: { type: 'llm-rubric', metric: 'recall-L1' } }],
+        },
+      },
+    ],
+  };
+  const rows = readAssertions(json);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(
+    rows.map((r) => [r.metric, r.pass]),
+    [['recall-L1', true]],
+  );
+});
+
+test('readAssertions 在兩種形狀都不成立時 throw，而不是靜默回空表', () => {
+  assert.throws(() => readAssertions({ foo: 'bar' }), /results/);
+  assert.throws(() => readAssertions(null), /results/);
+});
+
 test('aggregate 逐輪彙總並把兩類非模型紅格移出分母', () => {
   const r1 = run([
     { pass: true, reason: 'ok', assertion: { metric: 'recall-L1' } },

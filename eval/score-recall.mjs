@@ -11,12 +11,20 @@
 
 import { readFileSync } from 'node:fs';
 
-// promptfoo has moved this path around between versions; accept both shapes
-// and fail loudly rather than silently scoring zero rows.
+// Only `results.results` is a shape actually observed on a real run (Task 1
+// Step 4). `results` itself being the array is tolerated but unverified. If
+// neither shape holds an array, this is not "zero rows" — it means the input
+// JSON does not look like promptfoo output at all, so fail loudly instead of
+// silently reporting an empty, all-clear table.
 function resultRows(json) {
-  const rows = json?.results?.results ?? json?.results ?? [];
-  if (!Array.isArray(rows)) return [];
-  return rows;
+  if (Array.isArray(json?.results?.results)) return json.results.results;
+  if (Array.isArray(json?.results)) return json.results;
+  const keys = json && typeof json === 'object' ? Object.keys(json) : [];
+  throw new Error(
+    `resultRows: expected results.results or results to be an array, got ${typeof json}` +
+      (keys.length ? ` with top-level keys [${keys.join(', ')}]` : ' with no top-level keys') +
+      '. This looks like the wrong input file, not a run with zero rows.',
+  );
 }
 
 export function readAssertions(json) {
