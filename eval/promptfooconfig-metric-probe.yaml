@@ -1,0 +1,52 @@
+description: "Harness probe — named metric aggregation and assert-set threshold. No model calls."
+
+providers:
+  - id: file://stub-provider.js
+    label: "stub"
+    config:
+      output: "ALPHA BETA"
+
+prompts:
+  - "{{diff}}"
+
+tests:
+  # P1: 兩個 metric 各一條通過、一條失敗，確認兩個 metric 分開累加
+  - vars:
+      diff: "probe-1"
+    assert:
+      - type: javascript
+        metric: recall-L1
+        value: "output.includes('ALPHA')"
+      - type: javascript
+        metric: recall-L2
+        value: "output.includes('BETA')"
+      - type: javascript
+        metric: fabrication
+        value: "!output.includes('GAMMA')"
+
+  # P2: 同樣三個 metric，但 recall-L2 與 fabrication 刻意失敗。
+  # 若 metric 真的跨 test case 累加，彙總應為 recall-L1 2/2、recall-L2 1/2、fabrication 1/2
+  - vars:
+      diff: "probe-2"
+    assert:
+      - type: javascript
+        metric: recall-L1
+        value: "output.includes('ALPHA')"
+      - type: javascript
+        metric: recall-L2
+        value: "output.includes('ZULU')"
+      - type: javascript
+        metric: fabrication
+        value: "output.includes('GAMMA')"
+
+  # P3: 同樣的失敗包進 threshold 0 的 assert-set，確認整列不記 FAIL
+  # 但個別 assertion 的 metric 照樣進彙總
+  - vars:
+      diff: "probe-3"
+    assert:
+      - type: assert-set
+        threshold: 0
+        assert:
+          - type: javascript
+            metric: recall-L3
+            value: "output.includes('ZULU')"
