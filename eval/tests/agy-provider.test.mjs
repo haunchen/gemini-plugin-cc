@@ -52,6 +52,20 @@ test('stdout 是合法外殼、stderr 非空時仍正確取出 response', () => 
   assert.equal(r.metadata.num_turns, 1);
 });
 
+test('stdout 在 envelope 前有一行噪音時仍正確取出 response', () => {
+  const r = parseAgyResult(`Notice: a new version of agy is available.\n${envelope()}`, '', 0);
+  assert.equal(r.error, undefined);
+  assert.match(r.output, /## Verdict: PASS/);
+  assert.equal(r.metadata.num_turns, 1);
+});
+
+test('stdout 在 envelope 後有一行噪音時仍正確取出 response', () => {
+  const r = parseAgyResult(`${envelope()}\nagy: session closed.`, '', 0);
+  assert.equal(r.error, undefined);
+  assert.match(r.output, /## Verdict: PASS/);
+  assert.equal(r.metadata.num_turns, 1);
+});
+
 test('外殼正常但 response 命中既有 regex 仍判為 error', () => {
   const r = parseAgyResult(
     envelope({ response: 'jetski: no output produced — a tool required the "read_file" permission' }),
@@ -66,4 +80,23 @@ test('完全沒有輸出時回 error 並帶 exit code', () => {
   const r = parseAgyResult('', '', 3);
   assert.equal(r.output, undefined);
   assert.match(r.error, /exit 3/);
+});
+
+test('envelope 可解析但 response 欄位缺失或非字串時判為不可解析', () => {
+  const r = parseAgyResult(envelope({ response: 42 }), '', 0);
+  assert.equal(r.output, undefined);
+  assert.match(r.error, /agy returned an unparseable envelope/);
+});
+
+test('envelope.usage 缺失時 metadata.output_tokens 為 undefined 而不拋錯', () => {
+  const raw = JSON.stringify({
+    conversation_id: 'c1',
+    status: 'SUCCESS',
+    response: '## Review Summary\nfine\n\n## Verdict: PASS',
+    duration_seconds: 1.5,
+    num_turns: 1,
+  });
+  const r = parseAgyResult(raw, '', 0);
+  assert.equal(r.error, undefined);
+  assert.equal(r.metadata.output_tokens, undefined);
 });

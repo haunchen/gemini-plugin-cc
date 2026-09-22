@@ -73,6 +73,22 @@ function infraFailure(output) {
   return output.length < SHORT_OUTPUT && INFRA_TOKENS.test(output);
 }
 
+// Pull the outermost `{...}` out of a string that may carry noise around it.
+//
+// Tolerates a stray line before or after the envelope on stdout — an update
+// notice, a deprecation banner, a debug print — without needing to know what
+// that noise looks like. It does NOT make JSON.parse itself lenient: the
+// slice still has to be valid JSON, so genuinely malformed output (a
+// truncated envelope, mismatched braces) still falls through to the caller's
+// existing regex heuristics rather than being coerced into something that
+// only looks like an envelope.
+function extractJsonEnvelope(text) {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) return null;
+  return text.slice(start, end + 1);
+}
+
 // Parse agy's --output-format json envelope.
 //
 // Three layers, in order, because only the first one is new and the other two
@@ -97,6 +113,18 @@ function infraFailure(output) {
 // envelope (or is empty), the combined stdout+stderr text is what layer 2
 // checks and what the error message embeds, because agy's own infrastructure-
 // failure text has been observed on either stream.
+//
+// A strict `JSON.parse(stdout.trim())` has the same brittleness one layer up:
+// it demands stdout be nothing but the envelope, so one extra line agy prints
+// tomorrow (a new update banner, say) would flip every cell in a run to
+// "unparseable envelope" and discard complete reviews wholesale — the exact
+// failure mode the stderr comment above already exists to avoid, just moved
+// to stdout. So the strict parse is tried first (cheapest, and correct for
+// the common case), and only on failure does a second attempt extract the
+// outermost `{...}` and retry — noise around a well-formed envelope should
+// not cost the review, but content that isn't a well-formed envelope at all
+// must still fall through to the regex heuristics below, not be forced into
+// a shape it doesn't have.
 function parseAgyResult(stdout, stderr, exitCode) {
   const raw = `${stdout}${stderr}`.trim();
   if (!raw) {
@@ -107,7 +135,14 @@ function parseAgyResult(stdout, stderr, exitCode) {
   try {
     envelope = JSON.parse(stdout.trim());
   } catch {
-    envelope = null;
+    const extracted = extractJsonEnvelope(stdout);
+    if (extracted) {
+      try {
+        envelope = JSON.parse(extracted);
+      } catch {
+        envelope = null;
+      }
+    }
   }
 
   if (!envelope || typeof envelope !== 'object' || typeof envelope.response !== 'string') {
