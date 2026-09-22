@@ -222,7 +222,7 @@ These are not quality regressions. They are out of every denominator above.
   - **recall-spec 三輪皆 0/1**：`LT1` 三輪全漏。這正是 MyMoneyBook issue #26 記載的原始症狀（大 diff 上的空 PASS、Spec Compliance 段漏報越界檔）在本 eval 內的複現。
   - **spec-section-present 三輪皆 1/1**。
   - recall-L2 內部方向一致的個別條目：`G4`、`HC1`、`HC2`、`HL1` 三輪皆中；`RR1`、`LT2` 三輪皆漏。`RR1` 三輪全漏，與 spec D24 記載的「同一份 diff 交給 single-shot 跑兩次、兩次皆 PASS 零 finding」完全吻合——那個錨點複現了。`LT2` 三輪全漏。
-  - fabrication 內部方向一致的個別條目：`N2`–`N7`（六條）三輪皆中，僅 `N1` 一條在 r1 失手一次（見下方跳動）。誤報方向幾乎沒有問題，漏報方向才是這次 baseline 的主要失分來源——那正是 S9 要能讀出的那個組合。
+  - fabrication 內部方向一致的個別條目：`N2`–`N7`（六條）三輪皆中，僅 `N1` 一條在 r1 失手一次（見下方跳動）。這個 fabrication 分數只涵蓋 `migration-cli-entrypoint.diff` 這七條已知證偽的宣稱，不是誤報率——一般的誤報方向（乾淨 diff 上會不會無中生有）由 `eval/promptfooconfig.yaml` 的六個乾淨 diff 量，而這次 baseline 沒有跑那份 config，兩者不能互相替代。就這七條已知宣稱而言幾乎沒有問題，漏報方向才是這次 baseline 的主要失分來源——那正是 S9 要能讀出的那個組合。
 
 - 三輪之間跳動的 metric（抽樣變異，不得單獨引用）：`G10`（recall-L2，X o o）、`DR1`（recall-L2，X X o）、`DR2`（recall-L2，o X X）、`HL2`（recall-L2，o X X）、`AS2`（recall-L2，o X X）、`RD1`（recall-L2，X o o）、`N1`（fabrication，X o o）。25 條裡有 7 條會翻面，其中 6 條落在 recall-L2（使 recall-L2 的彙總數字本身也跟著在 7/12、6/12、7/12 之間跳動，不能單獨引用彙總值當基準線，只有上面列出的個別一致條目可用）、1 條落在 fabrication（`N1`，使 fabrication 彙總在 6/7 與 7/7 之間跳動）。四條選來當敏感度計量點的 pairwise 次級缺陷（`HC2`、`HL2`、`AS2`、`RD1`）裡有三條（`HL2`、`AS2`、`RD1`）落在這個跳動區，只有 `HC2` 三輪全過——它們確實坐在偵測門檻附近，符合當初選它們的理由。
 
@@ -232,3 +232,9 @@ These are not quality regressions. They are out of every denominator above.
 原判準宣稱的機制被 `attribute-shadowing.diff` 自身推翻，詳見
 `eval/ground-truth/existing-fixtures.md`。因此上表 AS2 一格的三輪讀數（recall-L2，`o X X`）
 反映的是已被取代的判準，不得沿用；下一輪重跑才會得到新判準下的數字。
+
+注記：`spec-section-present` 這個 metric 名稱於本 baseline 跑完後（2026-09-22，全分支
+Final Review 之後）改名為 `diag-spec-section`，並補上註解說明它是組態診斷（量 spec marker
+有沒有送進 prompt）而非 recall 點——它與 24 條計分 rubric 混在同一張表容易被誤讀成 recall
+訊號。改名不影響判準本身，上表的 `spec-section-present 1/1 1/1 1/1` 數字不變；下一輪重跑
+輸出的欄名會是 `diag-spec-section`。
