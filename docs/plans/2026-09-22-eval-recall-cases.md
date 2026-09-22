@@ -20,9 +20,11 @@ Context: `CONTEXT.md`
 - eval 用的模型固定 `gemini-3.6-flash-high`、agent 固定 `gemini-review`，單臂，不加對照臂。
 - promptfoo 一律用 `@latest`；judge 用 `claude-sonnet-5`；`--max-concurrency 2`。
 - repo 沒有 package.json 也沒有測試框架。新增的測試一律用 Node 內建 `node --test`，不得新增任何 npm 相依或 package.json。
-- 本次變更只動 `eval/` 與 `docs/`，依 `CLAUDE.md` 的 Versioning 表屬於「Docs, eval configs, CI」，不 bump 任何版本，也不動 `assets/banner.svg`。
+- 本次變更只動 `eval/`、`docs/` 與根目錄的 `CLAUDE.md`，依 `CLAUDE.md` 的 Versioning 表屬於「Docs, eval configs, CI」，不 bump 任何版本，也不動 `assets/banner.svg`。
+- 純資料檔（`.diff` fixture、ground truth `.md`）的跨 task 相依以各 task 的 `Files: Create:` 清單為準，不另寫 `Interfaces` 區塊。只有程式碼與簽章的相依才寫 `Interfaces`。
 - MyMoneyBook 的 clone 與 worktree 一律留在 scratchpad（`D:/UserData/Temp/claude/D--UserData-Documents-Code-gemini-plugin-cc/e8660515-3184-4d88-84c6-5a7dc92ce277/scratchpad/`），不得進入專案目錄或版控。只有抽出來的 `.diff` 進版控。
 - fixture 的產生規則：`git show <sha> | sed -n '/^diff --git/,$p'`，即剝掉 commit header 只留 diff 本體，不改寫路徑、不改寫內容。這是既有 `migration-cli-entrypoint.diff` 的作法，新 fixture 沿用。
+- 唯一例外是需要 spec 合規判定的 fixture：`=== REQUIREMENTS (what this change is supposed to do) ===` 與 `=== CHANGE UNDER REVIEW ===` 兩個 marker 直接寫進 `.diff` 檔開頭，整包由 `{{diff}}` 帶進 prompt。這是既有 `spec-compliance-missing.diff`（`promptfooconfig.yaml` 的 TC12）的作法，且是唯一被驗證過可行的。全域 `prompts:` 模板不得改成條件式——那會讓九個案例共用一個帶分支的模板，而其中八個根本不需要 marker。marker 字串逐字照抄，括號內的說明是字串的一部分（見 spec D16 與 `CLAUDE.md`）。
 
 ---
 
@@ -30,7 +32,11 @@ Context: `CONTEXT.md`
 
 Implements: `gemini-review.md` #R22
 
-這是整份計畫的前置 spike。整個計分模型建立在「promptfoo 的具名 metric 會跨 test case 分開累加」與「`assert-set` 配 `threshold: 0` 能讓個別 assertion 照樣計分但整列不記 pass/fail」這兩個假設上，兩者目前只有文件層面的認知、沒有實跑過。這一步不呼叫 agy，不花 quota。
+這是整份計畫的前置 spike。真正載重的只有一件事：**`assertion.metric` 必須出現在 promptfoo 的輸出 JSON 裡，且逐條 assertion 的結果找得到**。`score-recall.mjs` 自己從 `gradingResult.componentResults[]` 加總，不依賴 promptfoo 摘要表的具名 metric 欄；但若 `metric` 根本沒被寫進輸出，就沒有東西可以分組，整個計分模型要換形狀。
+
+另外兩項（摘要表是否分開累加、`assert-set` 配 `threshold: 0` 的行為）順便一起量，成本為零。它們不擋計畫：Task 8 的 config 沒有用到 `assert-set`，摘要表也只是方便人眼看。量它們是為了把「文件這樣寫」與「這台機器上的 promptfoo 真的這樣做」分開記下來。
+
+這一步不呼叫 agy，不花 quota。
 
 Files:
 - Create: `eval/stub-provider.js`
@@ -155,9 +161,9 @@ Expected: 印出每列的 `gradingResult.componentResults` 陣列，每項帶 `a
 
 決策規則：
 
-- 三項都成立 → 照計畫往下走，把第 3 點觀察到的實際欄位路徑寫進 Task 3 的實作（Task 3 的程式碼已對兩種常見形狀做回退，若實際路徑是第三種，以實際觀察到的為準改 `readAssertions()`）。
-- 具名 metric 沒有分開累加 → 停下回報使用者。替代方案是 `score-recall.mjs` 自行從 `assertion.metric` 欄位彙總、不依賴 promptfoo 的摘要；這條路可行但要先確認 `assertion.metric` 確實出現在輸出 JSON 裡。
-- `threshold: 0` 不生效（整列仍記 FAIL）→ 不擋，改為在 Task 8 不使用 `assert-set`，讓 recall 案例的整列 pass/fail 逕行忽略，一切以 `score-recall.mjs` 的彙總為準。在本 task 的記錄中寫明此決定。
+- 第 3 點成立（逐條 assertion 找得到，且帶 `assertion.metric`）→ 照計畫往下走，把實際觀察到的欄位路徑寫進 Task 3 的 `readAssertions()`。Task 3 的程式碼已對兩種常見形狀做回退，若實際是第三種，以觀察到的為準改。
+- 第 3 點不成立（輸出 JSON 裡沒有 `assertion.metric`，或逐條結果根本不在輸出裡）→ **停下回報使用者**，不要往下走。這是唯一會擋住計畫的分支：沒有 metric 標籤就無法把 recall 與 fabrication 分開，整個計分模型要換形狀。
+- 第 1、2 點與預期不符 → 不擋，照實記在本 task 的 commit message 裡。Task 8 本來就不用 `assert-set`，摘要表的數字也只是人眼參考，一切以 `score-recall.mjs` 的彙總為準。
 
 Step 5: Commit
 
@@ -261,6 +267,7 @@ Step 3: 實作
 ```js
 //   providers:
 //     - id: file://agy-provider.js
+//       label: "flash-custom"
 //       config:
 //         agent: gemini-review      # omit for the bare model (no system prompt)
 //         model: gemini-3.6-flash-high
@@ -824,7 +831,7 @@ Files:
 - Create: `eval/ground-truth/rest-route-async.md`
 - Create: `eval/ground-truth/large-migration-task.md`
 
-Step 1: clone 並抽出兩份 diff
+Step 1: clone 並抽出 rest-route fixture
 
 Run（`$SCRATCH` 代入本 session 的 scratchpad 路徑；repo 若已 clone 過則跳過 clone）：
 
@@ -832,22 +839,83 @@ Run（`$SCRATCH` 代入本 session 的 scratchpad 路徑；repo 若已 clone 過
 SCRATCH="D:/UserData/Temp/claude/D--UserData-Documents-Code-gemini-plugin-cc/e8660515-3184-4d88-84c6-5a7dc92ce277/scratchpad"
 [ -d "$SCRATCH/mmb" ] || gh repo clone haunchen/MyMoneyBook "$SCRATCH/mmb"
 git -C "$SCRATCH/mmb" show 7051d0e | sed -n '/^diff --git/,$p' > eval/test-cases/rest-route-async.diff
-git -C "$SCRATCH/mmb" show ea34cad | sed -n '/^diff --git/,$p' > eval/test-cases/large-migration-task.diff
-wc -c eval/test-cases/rest-route-async.diff eval/test-cases/large-migration-task.diff
+wc -c eval/test-cases/rest-route-async.diff
 ```
 
-Expected: `rest-route-async.diff` 約 17.7 KB、`large-migration-task.diff` 約 22.5 KB（兩者都略小於 `git show` 的完整輸出，因為剝掉了 commit header）。
+Expected: 約 17.7 KB（略小於 `git show` 的完整輸出，因為剝掉了 commit header）。
 
-Step 2: 確認兩份 diff 不含 commit header
+`git show <sha>` 取的是不可變的 commit object，不受分支後續變動影響，因此不需要建 worktree。
 
-Run: `head -1 eval/test-cases/rest-route-async.diff && head -1 eval/test-cases/large-migration-task.diff && grep -c '^commit \|^Author: ' eval/test-cases/rest-route-async.diff eval/test-cases/large-migration-task.diff`
+Step 2: 組裝 large-migration-task fixture（帶 spec marker）
 
-Expected: 兩檔第一行都是 `diff --git a/backend/...`；`grep -c` 對兩檔都回 `0`。
+這一份與其他 fixture 不同：它要帶 `=== REQUIREMENTS (what this change is supposed to do) ===`
+與 `=== CHANGE UNDER REVIEW ===` 兩個 marker，整包由 `{{diff}}` 帶進 prompt。這是
+`spec-compliance-missing.diff`（`promptfooconfig.yaml` 的 TC12）已在用的作法，也是本 repo
+唯一驗證過可行的作法——全域 `prompts:` 模板維持只插值 `{{diff}}`，不改成條件式。
 
-這一步是必要的：commit message 裡有作者姓名與 email，且 `ea34cad` 的 commit message 主動
-交代了那個越界檔案——留著會讓模型直接讀到答案，spec 合規那條 assertion 就失去意義。
+REQUIREMENTS 區塊的內容逐字取自來源 repo 的 task brief：
+`git -C "$SCRATCH/mmb" show 55e8420:docs/plans/2026-08-01-postgres-migration.md | sed -n '1288,1310p'`
 
-Step 3: 寫 rest-route-async 的 ground truth
+Run：
+
+```bash
+SCRATCH="D:/UserData/Temp/claude/D--UserData-Documents-Code-gemini-plugin-cc/e8660515-3184-4d88-84c6-5a7dc92ce277/scratchpad"
+{
+cat <<'BRIEF'
+=== REQUIREMENTS (what this change is supposed to do) ===
+### Task 4: 冪等佔位改為單語句原子操作
+
+Implements: `postgres-migration.md` #R3, #R4
+
+Files:
+- Modify: `backend/lib/middleware/idempotency.ts`（整檔重寫）
+- Test: `backend/tests/middleware/idempotency.test.ts`（整檔重寫）
+- Test: `backend/tests/middleware/idempotency-release.test.ts`（改 async）
+- Test: `backend/tests/db/idempotency-schema.test.ts`（整檔重寫）
+
+Interfaces:
+- Consumes: Task 1 的 `Db`、Task 3 的 `createTestDb` / `createTestUser`
+- Produces: `lib/middleware/idempotency.ts` 匯出
+  - `const EXPIRY_SECONDS: number`（值為 300）
+  - `function hashBody(text: string): string`
+  - `type IdempotencyClaim = { type: 'claimed' } | { type: 'replay'; response: string; status: number } | { type: 'in_progress' } | { type: 'conflict' }`
+  - `async function claimIdempotency(db: Db, userId: number, key: string, bodyHash: string): Promise<IdempotencyClaim>`
+  - `async function finalizeIdempotency(db: Db, userId: number, key: string, response: string, status: number): Promise<void>`
+  - `async function releaseIdempotency(db: Db, userId: number, key: string): Promise<void>`
+  - `async function cleanExpiredKeys(db: Db): Promise<void>`
+=== CHANGE UNDER REVIEW ===
+BRIEF
+git -C "$SCRATCH/mmb" show ea34cad | sed -n '/^diff --git/,$p'
+} > eval/test-cases/large-migration-task.diff
+wc -c eval/test-cases/large-migration-task.diff
+```
+
+Expected: 約 23.7 KB（diff 本體約 22.5 KB 加上 brief 約 1.2 KB）。
+
+Step 3: 確認兩份 fixture 的形狀
+
+Run:
+
+```bash
+head -1 eval/test-cases/rest-route-async.diff
+head -1 eval/test-cases/large-migration-task.diff
+grep -n '^=== ' eval/test-cases/large-migration-task.diff
+grep -c '^commit \|^Author: ' eval/test-cases/rest-route-async.diff eval/test-cases/large-migration-task.diff
+grep -c 'lib/middleware/index.ts' eval/test-cases/large-migration-task.diff
+```
+
+Expected:
+
+- `rest-route-async.diff` 第一行為 `diff --git a/backend/...`
+- `large-migration-task.diff` 第一行為 `=== REQUIREMENTS (what this change is supposed to do) ===`，且 `grep -n '^=== '` 只印出兩行：第 1 行的 REQUIREMENTS 與 CHANGE UNDER REVIEW 那一行。只能有這兩個 marker，多出來的會被 agent 當成受審內容（spec D16）
+- `grep -c '^commit \|^Author: '` 對兩檔都回 `0`
+- `grep -c 'lib/middleware/index.ts'` 回非零——那是 LT1 要判的越界檔，必須真的在 diff 裡
+
+剝掉 commit header 是必要的，不只是為了乾淨：commit message 裡有作者姓名與 email，且
+`ea34cad` 的 commit message 主動交代了那個越界檔案的理由——留著會讓模型直接讀到答案，
+LT1 那條 assertion 就失去意義。
+
+Step 4: 寫 rest-route-async 的 ground truth
 
 `eval/ground-truth/rest-route-async.md`：
 
@@ -872,7 +940,7 @@ finding。這是極少數「確定會漏」的錨點，當敏感度計量器比�
 - 另兩條 fan-out 確認過的是測試檔內的 non-null assertion（LOW），實務上偏噪音，不進 recall 點。
 ```
 
-Step 4: 寫 large-migration-task 的 ground truth
+Step 5: 寫 large-migration-task 的 ground truth
 
 `eval/ground-truth/large-migration-task.md`：
 
@@ -883,10 +951,13 @@ Step 4: 寫 large-migration-task 的 ground truth
 約 22.5 KB。這是 MyMoneyBook issue #26 那張表裡的 Task 4——當時 gemini flash 對它回出
 439 bytes 的報告、零 findings、Verdict PASS。這份 fixture 是全套素材裡唯一能重現該症狀的。
 
-本 fixture 帶 `=== REQUIREMENTS (what this change is supposed to do) ===` 區塊跑，
-因此同時量 findings recall 與 spec 合規的越界檔漏報。REQUIREMENTS 區塊的內容見
-`promptfooconfig-recall.yaml` 中本案例的 `vars.requirements`，逐字取自來源 repo 的
-task brief（`docs/plans/2026-08-01-postgres-migration.md` 的 Task 4 標頭）。
+本 fixture 的檔案開頭寫死 `=== REQUIREMENTS (what this change is supposed to do) ===`
+與 `=== CHANGE UNDER REVIEW ===` 兩個 marker，因此同時量 findings recall 與 spec 合規的
+越界檔漏報。REQUIREMENTS 區塊逐字取自來源 repo 的 task brief
+（`docs/plans/2026-08-01-postgres-migration.md` 的 Task 4 標頭）。
+
+marker 寫在 fixture 裡而不是靠 prompt 模板組，是沿用 `spec-compliance-missing.diff`
+的既有作法——那是本 repo 唯一驗證過可行的路徑，且讓全域 `prompts:` 對九個案例維持同一份。
 
 ## 真缺陷（recall 點）
 
@@ -908,13 +979,13 @@ task brief（`docs/plans/2026-08-01-postgres-migration.md` 的 Task 4 標頭）�
   這個窗口極窄，構不成可描述的失效情境。
 ```
 
-Step 5: 確認四個檔案
+Step 6: 確認四個檔案
 
 Run: `ls -l eval/test-cases/rest-route-async.diff eval/test-cases/large-migration-task.diff eval/ground-truth/rest-route-async.md eval/ground-truth/large-migration-task.md`
 
 Expected: 四檔皆存在且非空。
 
-Step 6: Commit
+Step 7: Commit
 
 Run: `git add eval/test-cases/rest-route-async.diff eval/test-cases/large-migration-task.diff eval/ground-truth/rest-route-async.md eval/ground-truth/large-migration-task.md && git commit -m "test(eval): 加跨 repo 的 rest-route 與大 diff fixture"`
 
@@ -1110,30 +1181,11 @@ tests:
         metric: recall-L2
         value: "RR1. Grade PASS if the review reports that the DELETE handler performs two consecutive writes — deactivating the account and clearing the user's default account reference — without wrapping them in a transaction, so a failure between them leaves a deactivated account still referenced. Raising it as a missing transaction, a partial-failure window, or a read-modify-write race all count. Grade FAIL if the review does not raise the unwrapped writes in the DELETE path."
 
-  # large-migration-task：帶 REQUIREMENTS 區塊，同時量 findings recall 與 spec 合規
+  # large-migration-task：REQUIREMENTS 與 CHANGE UNDER REVIEW 兩個 marker 寫在 fixture
+  # 檔案開頭（Task 6 Step 2 組裝的），整包由 {{diff}} 帶入，與 spec-compliance-missing.diff
+  # 同一作法。這裡不需要也不得另加 vars——全域 prompts 只插值 {{diff}}。
   - vars:
       diff: "file://test-cases/large-migration-task.diff"
-      requirements: |
-        ### Task 4: 冪等佔位改為單語句原子操作
-
-        Implements: `postgres-migration.md` #R3, #R4
-
-        Files:
-        - Modify: `backend/lib/middleware/idempotency.ts`（整檔重寫）
-        - Test: `backend/tests/middleware/idempotency.test.ts`（整檔重寫）
-        - Test: `backend/tests/middleware/idempotency-release.test.ts`（改 async）
-        - Test: `backend/tests/db/idempotency-schema.test.ts`（整檔重寫）
-
-        Interfaces:
-        - Consumes: Task 1 的 `Db`、Task 3 的 `createTestDb` / `createTestUser`
-        - Produces: `lib/middleware/idempotency.ts` 匯出
-          - `const EXPIRY_SECONDS: number`（值為 300）
-          - `function hashBody(text: string): string`
-          - `type IdempotencyClaim = { type: 'claimed' } | { type: 'replay'; response: string; status: number } | { type: 'in_progress' } | { type: 'conflict' }`
-          - `async function claimIdempotency(db: Db, userId: number, key: string, bodyHash: string): Promise<IdempotencyClaim>`
-          - `async function finalizeIdempotency(db: Db, userId: number, key: string, response: string, status: number): Promise<void>`
-          - `async function releaseIdempotency(db: Db, userId: number, key: string): Promise<void>`
-          - `async function cleanExpiredKeys(db: Db): Promise<void>`
     assert:
       - type: llm-rubric
         metric: recall-spec
@@ -1201,7 +1253,33 @@ Run: `cd eval && npx promptfoo@latest validate -c promptfooconfig-recall.yaml 2>
 
 Expected: 驗證通過。若該子指令在當前 promptfoo 版本不存在，改跑 `npx promptfoo@latest eval -c promptfooconfig-recall.yaml --filter-first-n 0 2>&1 | tail -5`，確認它讀得進 config 而不是報 YAML 錯。
 
-Step 4: Commit
+Step 4: 確認 spec marker 真的送進了 prompt
+
+這是唯一一個 marker 沒送到就會靜默失敗的地方——`LT1` 與 `spec-section-present` 兩條會
+不分模型好壞地固定失敗，而畫面上看起來就只是「模型沒抓到」。跑單一案例確認一次：
+
+Run（在 `eval/` 下）：
+
+```bash
+npx promptfoo@latest eval -c promptfooconfig-recall.yaml --no-cache \
+  --filter-pattern large-migration-task --output out/spec-marker-check.json
+node -e "
+const j=require('./out/spec-marker-check.json');
+const rows=j.results?.results??j.results??[];
+const p=JSON.stringify(rows[0]?.prompt??rows[0]?.vars??'');
+console.log('REQUIREMENTS marker in prompt:', p.includes('=== REQUIREMENTS (what this change is supposed to do) ==='));
+console.log('CHANGE marker in prompt:', p.includes('=== CHANGE UNDER REVIEW ==='));
+console.log('has Spec Compliance in output:', String(rows[0]?.response?.output??'').includes('Spec Compliance'));
+"
+```
+
+Expected: 前兩行皆為 `true`。第三行反映的是模型行為，不是組態正確性——`false` 代表模型
+沒輸出該區塊（是真失敗），但只有在前兩行為 `true` 的前提下這個判讀才成立。
+
+若 `--filter-pattern` 在當前 promptfoo 版本不支援，改為暫時把 config 的 `tests:` 註解到
+只剩該案例跑一次，確認後還原；不要因為不好跑就跳過這一步。
+
+Step 5: Commit
 
 Run: `git add eval/promptfooconfig-recall.yaml eval/.gitignore && git commit -m "test(eval): 加 promptfooconfig-recall，每缺陷一條 rubric"`
 

@@ -134,13 +134,15 @@ ground truth 獨立成檔（`eval/ground-truth/<fixture>.md`），記 rubric 承
 
 ### 跨 repo 素材的取得
 
-MyMoneyBook 為 private 且本機無 checkout。clone 到 scratchpad（不進專案目錄），用 `git worktree` 釘到對應 commit 避免讀到後續改動，抽出 diff、依 `eval/ab/README.md` 既有規則去識別化後只把 `.diff` 進版控。原始 checkout 與 worktree 都不進版控。
+MyMoneyBook 為 private 且本機無 checkout。clone 到 scratchpad（不進專案目錄），`git show <sha>` 抽出 diff——那取的是不可變的 commit object，不受分支後續變動影響，不需要 worktree——依既有規則剝掉 commit header 後只把 `.diff` 進版控。clone 本身不進版控。
+
+`large-migration-task.diff` 多一道：`=== REQUIREMENTS (what this change is supposed to do) ===` 與 `=== CHANGE UNDER REVIEW ===` 兩個 marker 寫在檔案開頭，REQUIREMENTS 區塊逐字取自來源 repo 的 task brief。marker 放檔案裡而不是靠 prompt 模板組，是沿用 `spec-compliance-missing.diff` 的既有作法——那是本 repo 唯一驗證過可行的路徑，且讓全域 `prompts:` 對九個案例維持同一份。剝掉 commit header 在這一份尤其要緊：`ea34cad` 的 commit message 主動交代了那個越界檔案的理由，留著等於把答案交給模型。
 
 ## 執行順序
 
 硬順序，前一步沒過不往下：
 
-0. **stub provider 空轉**——確認 promptfoo 的具名 metric 真的跨 test case 分開累加，以及 `assert-set` 配 `threshold: 0` 能否做到「個別 assertion 照樣計分、整列不記 pass/fail」。兩點目前只有文件層面的認知，沒有實跑過；失敗的話整個計分模型要換形狀。不呼叫 agy，不花 quota
+0. **stub provider 空轉**——確認 `assertion.metric` 真的出現在 promptfoo 的輸出 JSON 裡、且逐條 assertion 的結果找得到。這一項才是載重的：`score-recall.mjs` 自己從 `gradingResult.componentResults[]` 加總，不靠 promptfoo 摘要表的具名 metric 欄，但 metric 標籤沒被寫進輸出就沒有東西可以分組，整個計分模型要換形狀。順便量摘要表的彙總行為與 `assert-set` 配 `threshold: 0`，成本為零、不擋計畫（config 沒用到 `assert-set`）。不呼叫 agy，不花 quota
 1. `agy-provider.js` 改 `--output-format json`
 2. clone MyMoneyBook、worktree 釘 commit、抽 diff、去識別化
 3. 寫 ground truth 與 `eval/promptfooconfig-recall.yaml`
@@ -174,16 +176,18 @@ eval/
   promptfooconfig-recall.yaml     新增，現行那份不動
   agy-provider.js                 改：加 --output-format json
   score-recall.mjs                新增
+  stub-provider.js                新增，只供機制驗證用，不參與計分
   ground-truth/
     migration-cli-entrypoint.md
     doctor-agy-bin.md
     rest-route-async.md
     large-migration-task.md
+    existing-fixtures.md          五份既有 fixture 的次級缺陷與 tier
   test-cases/
     migration-cli-entrypoint.diff 從 experiment 分支撿回
     doctor-agy-bin.diff           本 repo 64f5c42
-    rest-route-async.diff         MyMoneyBook worktree 抽出
-    large-migration-task.diff     同上，Task 4，25KB
+    rest-route-async.diff         MyMoneyBook 7051d0e
+    large-migration-task.diff     MyMoneyBook ea34cad，Task 4，含 spec marker
 ```
 
 ## 決策編號
