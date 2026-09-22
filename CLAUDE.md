@@ -11,6 +11,8 @@ A Claude Code plugin marketplace that reaches Gemini through the Antigravity CLI
 
 Everything user-facing stays in Claude Code. `agy` is only the backend that runs Gemini — the plugins are not installed into agy as skills.
 
+`CONTEXT.md` is this repo's glossary — read it before writing or reviewing anything eval-related, since it fixes terms (e.g. "recall point" vs. "fabrication gate") that are easy to conflate otherwise.
+
 ## Architecture
 
 Marketplace registry at `/.claude-plugin/marketplace.json` points at two plugin sources under `/plugins/`:
@@ -171,6 +173,8 @@ Read a run with `node eval/score-recall.mjs eval/out/recall-r*.json`, which clas
 The two `promptfooconfig-security*.yaml` configs are PARKED — the command they target was removed (see D12). Their test cases and rubrics are kept for whenever it comes back.
 
 agy exposes no sampling controls, so eval runs vary more than the pre-0.2.0 numbers, which were pinned to `temperature: 0` via a `.gemini/settings.json` that no longer applies.
+
+**The provider requires an agy that understands `--output-format json`** — measured usable on agy 1.2.7. An older agy that does not recognize the flag turns every cell into a provider error; `score-recall.mjs` excludes those from the denominator, so the table comes back empty rather than silently reporting zero recall, with the excluded count showing what happened. This is not a claim that 1.2.6 or earlier fails — only that 1.2.7 is the version actually exercised.
 
 **`--json-schema` is not a way out of that variance, and it was measured.** The provider carries `--output-format json` for the envelope (`status` is a deterministic infrastructure check, unlike pattern-matching prose) but deliberately not `--json-schema`. On agy 1.2.7 with `--agent gemini-review` the schema is silently ignored: markdown comes back, `num_turns` is 4, and the same report repeats four times for 6461 output tokens — the agent prompt's `## Output Format` section wins. Without `--agent` the bare model does emit JSON, but `response` then holds two concatenated JSON objects. The arm that works is not the arm being measured, and changing the agent's output format to suit the harness would measure a prompt nobody ships (D19/D21/D22 all measured that output-format changes move the finding count).
 
