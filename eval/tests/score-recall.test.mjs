@@ -61,6 +61,36 @@ test('readAssertions 對沒有 metric 的 assertion 給 unlabelled', () => {
   assert.equal(rows[0].metric, 'unlabelled');
 });
 
+test('readAssertions 從 rubric value 開頭解析出 ID', () => {
+  const rows = readAssertions(
+    run([
+      {
+        pass: true,
+        reason: 'ok',
+        assertion: {
+          type: 'llm-rubric',
+          metric: 'recall-L2',
+          value: 'AS2. Grade PASS if the review reports that the bare except Exception: pass ...',
+        },
+      },
+    ]),
+  );
+  assert.equal(rows[0].id, 'AS2');
+});
+
+test('readAssertions 在 value 解析不出 ID 時回退到 metric 名稱', () => {
+  const rows = readAssertions(
+    run([
+      {
+        pass: true,
+        reason: 'ok',
+        assertion: { type: 'javascript', metric: 'spec-section-present', value: "output.includes('Spec Compliance')" },
+      },
+    ]),
+  );
+  assert.equal(rows[0].id, 'spec-section-present');
+});
+
 test('readAssertions 跳過 assert-set 攤平後留下的聚合項（沒有 assertion 欄位）', () => {
   // promptfoo 把 assert-set 的巢狀結果攤平進同一個 componentResults[]，
   // 但聚合項本身（代表整個 assert-set 的分數）不帶 assertion 欄位，

@@ -10,6 +10,7 @@
 // Usage: node score-recall.mjs out/recall-r1.json out/recall-r2.json ...
 
 import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 // Only `results.results` is a shape actually observed on a real run (Task 1
 // Step 4). `results` itself being the array is tolerated but unverified. If
@@ -27,6 +28,16 @@ function resultRows(json) {
   );
 }
 
+// Rubric ids (G9, AS2, DR1, ...) live at the start of `assertion.value`, e.g.
+// "AS2. Grade PASS if ...". Assertions that carry no such id (the `javascript`
+// check on spec-section-present has no rubric prose to parse) fall back to
+// the metric name, so every row in the per-ID report still has something to
+// key on.
+function idFromValue(value) {
+  const m = /^([A-Z]+\d+)\./.exec(String(value ?? ''));
+  return m ? m[1] : null;
+}
+
 export function readAssertions(json) {
   const out = [];
   for (const row of resultRows(json)) {
@@ -38,8 +49,10 @@ export function readAssertions(json) {
       // carries no `assertion` field of its own. Skip it — it is not a real
       // assertion, and counting it would add a spurious "unlabelled" row.
       if (!c?.assertion) continue;
+      const metric = c.assertion.metric ?? 'unlabelled';
       out.push({
-        metric: c.assertion.metric ?? 'unlabelled',
+        id: idFromValue(c.assertion.value) ?? metric,
+        metric,
         pass: Boolean(c?.pass),
         reason: String(c?.reason ?? ''),
         hasOutput,
@@ -62,11 +75,18 @@ export function classify(a) {
 export function aggregate(runs) {
   const rounds = [];
   const excluded = { providerError: 0, judgeError: 0 };
+  // perId is the per-round, per-assertion-id verdict — 'pass' | 'fail' |
+  // 'provider-error' | 'judge-error'. It is additive: rounds/excluded keep
+  // their existing shape and values, this is a parallel view of the same
+  // classification keyed by id instead of metric.
+  const perId = [];
 
   for (const json of runs) {
     const byMetric = {};
+    const byId = {};
     for (const a of readAssertions(json)) {
       const verdict = classify(a);
+      byId[a.id] = verdict;
       if (verdict === 'provider-error') {
         excluded.providerError += 1;
         continue;
@@ -80,14 +100,21 @@ export function aggregate(runs) {
       if (verdict === 'pass') byMetric[a.metric].pass += 1;
     }
     rounds.push(byMetric);
+    perId.push(byId);
   }
 
-  return { rounds, excluded };
+  return { rounds, excluded, perId };
 }
+
+// Marks for the per-ID table. The two error verdicts get their own labels
+// rather than being folded into FAIL — otherwise excluding them from the
+// per-metric denominators above and then printing them as FAIL here would
+// quietly smuggle them back into the read as if they were model failures.
+const ID_MARK = { pass: 'PASS', fail: 'FAIL', 'provider-error': 'ERR(provider)', 'judge-error': 'ERR(judge)' };
 
 function report(files) {
   const runs = files.map((f) => JSON.parse(readFileSync(f, 'utf8')));
-  const { rounds, excluded } = aggregate(runs);
+  const { rounds, excluded, perId } = aggregate(runs);
 
   const metrics = [...new Set(rounds.flatMap((r) => Object.keys(r)))].sort();
   const header = ['metric', ...files.map((_, i) => `r${i + 1}`)].join('\t');
@@ -100,9 +127,28 @@ function report(files) {
   console.log('');
   console.log(`excluded — provider errors: ${excluded.providerError}, judge parse failures: ${excluded.judgeError}`);
   console.log('These are not quality regressions. They are out of every denominator above.');
+
+  // The tier/metric aggregates above are direction-only: individual ids flip
+  // between rounds (agy has no sampling controls), so a tier total moving is
+  // not itself readable as a prompt-change effect. Per-ID is the only grain
+  // that is — see docs/plans/2026-09-22-eval-recall-cases-design.md Baseline.
+  console.log('');
+  console.log('per-ID (the only reliable read across rounds — see design doc Baseline section):');
+  const ids = [...new Set(perId.flatMap((r) => Object.keys(r)))].sort();
+  const idHeader = ['id', ...files.map((_, i) => `r${i + 1}`)].join('\t');
+  console.log(idHeader);
+  for (const id of ids) {
+    const cells = perId.map((r) => (r[id] ? ID_MARK[r[id]] : '-'));
+    console.log([id, ...cells].join('\t'));
+  }
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('score-recall.mjs')) {
+const argvPath = process.argv[1];
+const isMain = argvPath
+  ? import.meta.url === pathToFileURL(argvPath).href || argvPath.endsWith('score-recall.mjs')
+  : false;
+
+if (isMain) {
   const files = process.argv.slice(2);
   if (files.length === 0) {
     console.error('usage: node score-recall.mjs <promptfoo-output.json> [...]');
