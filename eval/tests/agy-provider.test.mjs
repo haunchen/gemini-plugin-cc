@@ -34,13 +34,22 @@ test('status 不是 SUCCESS 一律回 error', () => {
 test('外殼解析不出來時回退到既有 regex 判別', () => {
   const r = parseAgyResult('Error: Agent execution terminated due to error.', '', 0);
   assert.equal(r.output, undefined);
+  assert.match(r.error, /agy did not return a response/);
   assert.match(r.error, /Agent execution terminated/);
 });
 
 test('外殼解析不出來且不像基礎設施失敗時，仍回 error 並附原始文字', () => {
   const r = parseAgyResult('some unstructured chatter', '', 0);
   assert.equal(r.output, undefined);
+  assert.match(r.error, /agy returned an unparseable envelope/);
   assert.match(r.error, /some unstructured chatter/);
+});
+
+test('stdout 是合法外殼、stderr 非空時仍正確取出 response', () => {
+  const r = parseAgyResult(envelope(), 'warning: something\n', 0);
+  assert.equal(r.error, undefined);
+  assert.match(r.output, /## Verdict: PASS/);
+  assert.equal(r.metadata.num_turns, 1);
 });
 
 test('外殼正常但 response 命中既有 regex 仍判為 error', () => {

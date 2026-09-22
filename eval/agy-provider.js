@@ -86,6 +86,17 @@ function infraFailure(output) {
 // the machine this was written on (--agent gemini-review read a file fine), so
 // what `status` holds for a denial is unknown. Dropping layers 2 and 3 would
 // trade verified detection for unverified detection.
+//
+// The envelope itself is parsed from stdout alone, not stdout+stderr. agy
+// writes the JSON envelope to stdout; stderr can carry a byte of unrelated
+// text on an otherwise successful run (a deprecation warning today, a debug
+// line tomorrow), and appending that before JSON.parse would turn a single
+// stray stderr byte into a false "unparseable envelope" error, discarding a
+// complete review — exactly the failure mode this task exists to remove.
+// stderr is not thrown away, though: once stdout fails to parse into a valid
+// envelope (or is empty), the combined stdout+stderr text is what layer 2
+// checks and what the error message embeds, because agy's own infrastructure-
+// failure text has been observed on either stream.
 function parseAgyResult(stdout, stderr, exitCode) {
   const raw = `${stdout}${stderr}`.trim();
   if (!raw) {
@@ -94,7 +105,7 @@ function parseAgyResult(stdout, stderr, exitCode) {
 
   let envelope = null;
   try {
-    envelope = JSON.parse(raw);
+    envelope = JSON.parse(stdout.trim());
   } catch {
     envelope = null;
   }
