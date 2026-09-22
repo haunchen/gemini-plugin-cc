@@ -15,10 +15,14 @@
 class StubProvider {
   constructor(options = {}) {
     this.config = options.config || {};
+    this.label = options.label;
   }
 
+  // Every provider in a config points at this same file, so the id has to
+  // come from the caller's label or promptfoo cannot tell two arms apart in
+  // its results (same reasoning as agy-provider.js's id()).
   id() {
-    return `stub:${this.config.label || 'default'}`;
+    return `stub:${this.label || 'default'}`;
   }
 
   async callApi() {
