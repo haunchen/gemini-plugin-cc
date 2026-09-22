@@ -15,6 +15,12 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 PLUGIN_DIR=$(cd -- "$SCRIPT_DIR/.." && pwd)
 STATUS=0
 
+# Resolve the same env vars the runtime code respects (image-describe.mjs,
+# intercept-image-read.sh), so the diagnostics check what will actually run
+# rather than always the default.
+AGY_BIN="${AGY_BIN:-agy}"
+OCR_BIN="${OCR_BIN:-tesseract}"
+
 ok()   { echo "[OK]   $1"; }
 fail() { echo "[FAIL] $1"; STATUS=1; }
 warn() { echo "[WARN] $1"; }
@@ -44,7 +50,7 @@ check_file() {
 }
 
 echo "== Required =="
-check_required_cmd agy
+check_required_cmd "$AGY_BIN"
 check_required_cmd node
 check_required_cmd jq
 check_file "$PLUGIN_DIR/.claude-plugin/plugin.json"
@@ -52,15 +58,15 @@ check_file "$PLUGIN_DIR/hooks/intercept-image-read.sh"
 check_file "$PLUGIN_DIR/hooks/image-describe.mjs"
 check_file "$PLUGIN_DIR/agy/agents/gemini-image-describe/agent.md"
 
-if command -v agy >/dev/null 2>&1; then
-  if agy --help >/dev/null 2>&1; then
+if command -v "$AGY_BIN" >/dev/null 2>&1; then
+  if "$AGY_BIN" --help >/dev/null 2>&1; then
     ok "agy runnable"
   else
     fail "agy installed but fails to run (check OAuth)"
   fi
   # --agent silently ignores unknown names, so a missing agent install shows up
   # as a generic description rather than an error. Check the file instead.
-  if [ -f "$HOME/.gemini/config/plugins/gemini-images-agents/agents/gemini-image-describe/agent.md" ]; then
+  if [ -f "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/config/plugins/gemini-images-agents/agents/gemini-image-describe/agent.md" ]; then
     ok "agent installed: gemini-image-describe"
   else
     fail "agent missing: run 'agy plugin install $PLUGIN_DIR/agy'"
@@ -71,10 +77,17 @@ echo
 echo "== Optional =="
 check_optional_cmd magick "image resize/convert; install via 'brew install imagemagick' or 'winget install ImageMagick.ImageMagick'"
 check_optional_cmd sips "macOS native image tool; no install needed on macOS, skipped on Windows"
-check_optional_cmd tesseract "OCR supplement; install via 'brew install tesseract tesseract-lang' or 'winget install UB-Mannheim.TesseractOCR'"
+if [ "$OCR_BIN" = "none" ]; then
+  ok "OCR: disabled (OCR_BIN=none)"
+else
+  check_optional_cmd "$OCR_BIN" "OCR supplement; install via 'brew install tesseract tesseract-lang' or 'winget install UB-Mannheim.TesseractOCR'"
+fi
 
-if command -v tesseract >/dev/null 2>&1; then
-  if tesseract --list-langs 2>&1 | grep -q '^chi_tra$'; then
+# The chi_tra language-pack check only makes sense for tesseract itself, not
+# for an arbitrary OCR_BIN override (a custom binary may not support
+# --list-langs at all).
+if [ "$OCR_BIN" = "tesseract" ] && command -v "$OCR_BIN" >/dev/null 2>&1; then
+  if "$OCR_BIN" --list-langs 2>&1 | grep -q '^chi_tra$'; then
     ok "tesseract language: chi_tra"
   else
     warn "tesseract language: chi_tra not installed (Chinese OCR unavailable)"
@@ -87,12 +100,12 @@ if [ "$VERBOSE" = "1" ]; then
   echo "PLUGIN_DIR: $PLUGIN_DIR"
   echo "AGY_MODEL: ${AGY_MODEL:-gemini-3.6-flash-high (default)}"
   echo "MAX_WIDTH: ${MAX_WIDTH:-1568 (default)}"
-  echo "OCR_BIN: ${OCR_BIN:-tesseract (default)}"
-  echo "AGY_BIN: ${AGY_BIN:-agy (default)}"
+  echo "OCR_BIN: $OCR_BIN"
+  echo "AGY_BIN: $AGY_BIN"
   echo "TMPDIR: ${TMPDIR:-/tmp (default)}"
   echo "OS: $(uname -s)"
-  if command -v agy >/dev/null 2>&1; then
-    echo "agy version: $(agy --version 2>/dev/null | head -1)"
+  if command -v "$AGY_BIN" >/dev/null 2>&1; then
+    echo "agy version: $("$AGY_BIN" --version 2>/dev/null | head -1)"
   fi
   if command -v node >/dev/null 2>&1; then
     echo "node version: $(node --version)"

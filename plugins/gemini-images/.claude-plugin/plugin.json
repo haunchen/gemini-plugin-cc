@@ -1,6 +1,6 @@
 {
   "name": "gemini-images",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Intercept Claude Code Read on image files and replace with Gemini-generated text descriptions to avoid prompt cache invalidation",
   "author": {
     "name": "Frank Chen"
