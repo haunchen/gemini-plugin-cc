@@ -237,3 +237,48 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Rationale**: agy 的 `view_file` 背後權限名為 `read_file`，headless 無法跳確認提示故一律 soft-deny，且該拒絕會丟掉整個 turn——command 拿回的是一行 `no output produced`，不是少一個 finding 的 review。D9 為此建立的整套 nameable-risk 查證規則因而全程失效。實測（agy 1.1.9，rename 已匯出符號的 diff）：不帶 flag 2/2 被拒，帶 flag 2/2 完成；輸出差異是「callers may need updating, not verifiable」的 LOW 對上指名兩個實際 import 檔的 HIGH。選 `--add-dir` 而非 `~/.gemini/settings.json` 的 `permissions.allow`：後者是每台機器的設定，無法隨 plugin 出貨，別人裝了照樣壞。不選 `--dangerously-skip-permissions`：既有約束禁止，且 `--add-dir` 已足夠。三個 command 的錯誤處理同步更正——原本把「輸出沒有 `## Verdict:`」一律讀成 agent 未安裝並導向 `/gemini:setup`，對本失敗模式是錯的指引。此失敗非確定性（是否讀檔取決於 diff 內容），這正是它長期未被發現的原因
 - **Date**: 2026-08-02
 
+
+## Pending Changes
+
+來源：`docs/plans/2026-09-22-eval-recall-cases-design.md`（feat/eval-recall-cases）。
+
+新編號從 R22 與 D26 起。D19–D25 保留給 `experiment/review-prompt-ab` 分支上已寫、尚未合併的條目，避免兩邊各自從 D19 開始而在合併時撞號。
+
+### ADDED R22: 漏報向的 eval 計分
+- **Level**: MUST
+- **Description**: `eval/promptfooconfig-recall.yaml` 為獨立於 `promptfooconfig.yaml` 的第二份 config，量的是 reviewer 漏報的代價。每個埋在 fixture 裡的缺陷掛一條獨立 `llm-rubric`，以 promptfoo 的 `metric` 欄位分流；recall 與 fabrication 兩個數字各自彙總，不平均成單一分數，亦不記該列的 pass/fail。fabrication 的判準沿用 D21：只罰把未查證的事實當成既成事實——斷言、評 MEDIUM/HIGH、或讓它左右 verdict；標明「not verifiable from this diff」的 LOW 明確放行。判準一律是「有沒有報出指定缺陷」，任何以報告長度或檢查清單完整度為判準的 assertion 均不得加入（D19）。現行 `promptfooconfig.yaml` 維持不動當回歸網。
+
+### ADDED R23: 缺陷難度分層
+- **Level**: SHOULD
+- **Description**: 每份 fixture 配一份 `eval/ground-truth/<fixture>.md`，逐條記缺陷的證據來源、難度 tier 與已證偽的誤報清單。tier 為 L1（讀 diff 即見）／L2（需領域知識或跨 hunk 串接）／L3（需推理 diff 內看不到的事實）。recall 按 tier 切分彙總，使「揉到哪一層」可讀。難度梯度以標註表達，不另造刻意安排梯度的合成 diff。
+
+### ADDED R24: eval provider 的結構化外殼與紅格分類
+- **Level**: MUST
+- **Description**: `eval/agy-provider.js` 帶 `--output-format json` 並解析外殼取 `response`，不帶 `--json-schema`。基礎設施失敗依序判定：外殼 `status !== "SUCCESS"`、外殼無法解析時回落現有 `INFRA_FAILURE` regex、外殼正常但 `response` 命中該 regex。外殼的 `num_turns`、`usage.output_tokens`、`duration_seconds` 放進 `metadata` 僅供觀測，不得進入任何 assertion。`eval/score-recall.mjs` 讀 promptfoo 的 JSON 輸出，逐條 assertion 分為真失敗、provider 錯誤、judge 解析失敗三類，後兩類移出 recall 分母並單獨列計數。
+
+### ADDED S9: 量出 reviewer 變安靜的代價
+- **Given**: 一份 prompt 改動已通過現行 `promptfooconfig.yaml` 的六個罰誤報案例
+- **When**: 對同一改動跑 `promptfooconfig-recall.yaml` 三輪
+- **Then**: 輸出按 tier 切分的 recall 與獨立的 fabrication 數字，使「誤報沒變多但真缺陷少報了」這個組合可被讀出
+- **Implements**: #R22, #R23
+
+### ADDED S10: 排除非模型成因的紅格
+- **Given**: 一輪 eval 中出現 provider 錯誤與 judge 解析失敗
+- **When**: 以 `score-recall.mjs` 判讀該輪輸出
+- **Then**: 兩類紅格移出 recall 分母並單獨列出計數，不計為品質退步
+- **Implements**: #R24
+
+### ADDED D26: 計數用每缺陷一條 rubric，不用 agy 的結構化輸出
+- **Decision**: 放棄原訂的 `--json-schema` 方案。計數改以「一個缺陷一條 `llm-rubric`」表達，recall 即通過條數比例；`--output-format json` 仍採用，但只用於取外殼與基礎設施判別
+- **Rationale**: 實測（agy 1.2.7、`gemini-3.6-flash-high`）`--json-schema` 配 `--agent gemini-review` 時 schema 被無聲忽略——吐 markdown、`num_turns: 4`、同一份報告重複四次、6461 output tokens，兩次跑皆然；推測是 agent prompt 的 `## Output Format` 段與 schema 打架。不帶 agent 的裸模型臂確實吐 JSON，但 `response` 內是兩個串接的 JSON 物件，且多出 schema 未定義的 `toolAction` / `toolSummary` 鍵。可用的那一臂不是要量的對象，要量的那一臂不可用。改 agent prompt 讓它吐 JSON 亦不採用：D19/D21/D22 已量到輸出格式的改動會實質移動 findings 數，那樣量到的就不是出貨 prompt 的 recall。每缺陷一條 rubric 另解掉原方案要解的問題——judge 偶發解析失敗（實測 39 格中 4 格，併發降到 2 仍 1 格）從整案歸零降為只損失 1/N，且看得出是哪一格
+- **Date**: 2026-09-22
+
+### ADDED D27: recall 與 fabrication 同 fixture 量、分開彙總
+- **Decision**: `migration-cli-entrypoint.diff` 上同時掛「該報的 G4/G8/G9/G10」與「不該斷言的 N1–N7」兩組 assertion，兩個數字各自彙總不平均。不另開第三份 config
+- **Rationale**: D21/D22 的核心發現是兩種失效互為代價——收窄 LOW 上限就多抓一條真缺陷、同時多虛構一條外鍵，總量不變。只記 recall 會誘導把 prompt 推向亂報。N1–N7 的 ground truth 只在這份 diff 上成立，搬到別處無意義。不另開 config：那需要對同一份 diff 跑兩次 review，而 agy 無 sampling 控制，兩次是不同 sample，「這一跑多抓一條真的、也多虛構一條」的配對關係會消失。與 `promptfooconfig.yaml` 分家的理由不同且仍成立——誤報案例的 PASS 是「沒有多報」、漏報案例的分數是「報出比例」，混進同一份 config 算平均會讓兩邊都讀不出來
+- **Date**: 2026-09-22
+
+### ADDED D28: 難度梯度做成標註維度，不另造梯度案例
+- **Decision**: 不新寫刻意安排「明顯／中等／需推理」三層的合成 diff。改在 ground truth 為每條既有缺陷標 tier，由 score 腳本按 tier 切分 recall
+- **Rationale**: 新造梯度 diff 的缺陷會是憑空寫的，不是人工查證過的真缺陷，與整份設計「不憑空造缺陷」的前提直接衝突。而現有素材本就含梯度：`migration-cli-entrypoint.diff` 的 G9 / G4、G10 / G8 正好是三層，`snowflake-filter.diff` 的 `Number()` 精度是另一個 L3。標註路線另有一項合成 diff 沒有的好處——每加一份 fixture 都自動進梯度讀數。D22 量到的 trade-off 正落在這個維度上：arm N 的「不得臆測未見程式碼」同時擋掉虛構的外鍵與 snowflake 精度，兩者都是 L3，tier 切分讓下次改 prompt 時看得出是不是又在兩種失效模式之間搬運
+- **Date**: 2026-09-22
