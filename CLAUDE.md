@@ -65,7 +65,7 @@ Commands are Markdown files with YAML frontmatter (`description`, `allowed-tools
 echo "$INPUT" | agy --agent gemini-review --model "$MODEL" --print-timeout 5m 2>&1
 ```
 
-All commands default to `gemini-3.6-flash-high` with effort pinned to `high`. There is no automatic fallback: a quota / rate-limit error surfaces to the user, who can retry or pick another model with `--model`.
+All commands default to `gemini-4-hydrogen-high` with effort pinned to `high`. There is no automatic fallback: a quota / rate-limit error surfaces to the user, who can retry or pick another model with `--model`.
 
 ### A whitelisted tool is not a permitted tool
 
@@ -103,7 +103,9 @@ Three things about them are load-bearing, and none of them fail loudly:
 
 Change any of the three strings and you must change both sides in the same commit: `plugins/gemini/commands/review.md` and `plugins/gemini/agy/agents/gemini-review/agent.md`.
 
-The old pro-by-default routing is gone: agy's Pro is `gemini-3.1-pro`, two generations behind 3.6 flash, and flash-high already scores 10/10 on the eval suite. `--model pro` still resolves to `gemini-3.1-pro-high` for explicit opt-in, and any other value passes through to agy unchanged (`agy models` lists the slugs).
+Hydrogen is the default because it ties 3.8 Flash on the recall eval (36/51 vs 35/50, fabrication 21/21 both) at about a sixth of the latency, while Argon — the heavier model — scored 23/51 with the same agent. `--model flash` resolves to `gemini-3.8-flash-high`, `--model pro` to `gemini-4-argon-high`, and any other value passes through to agy unchanged (`agy models` lists the slugs). See `docs/specs/gemini-review.md` D29.
+
+**agy drops retired slugs outright.** `gemini-3.6-flash-high`, `3.7-flash-high` and `3.1-pro-high` all fail with `invalid model selection` on agy 1.5.3, and every command had one of them as its default. When Google ships a new generation, run `agy models` before trusting any hard-coded slug in this repo.
 
 ## How `/gemini:implement` Works
 
@@ -125,7 +127,7 @@ Three things are load-bearing and specific to this command:
 
 The agent has no shell, so it cannot run the tests it writes. It is required to say so rather than report them passing, and the command repeats that when handing back: tests now exist, none has passed.
 
-The default model is `gemini-3.7-flash-high` while review stays on 3.6. That split is measured, not an oversight — see `docs/specs/gemini-implement.md` D6. Reviewing is where the two are indistinguishable; writing code is where 3.7's gains are.
+The default model is `gemini-4-hydrogen-high`, the same as review. Its implement quality has not been measured here — the review eval does not cover writing code. See `docs/specs/gemini-implement.md` D9.
 
 The prompt's underspecification gate is worth reading before editing it. It lists five literal conditions rather than saying "stop if ambiguous", because the adjective version demonstrably did not work: given "add caching so it is faster" the agent shipped an unbounded cache and reported `DONE`. See D5.
 

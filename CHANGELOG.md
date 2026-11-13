@@ -4,6 +4,34 @@ All notable changes to this project are documented here.
 
 The two plugins are versioned and released independently. `gemini` uses the bare `vX.Y.Z` tags and plain `## [X.Y.Z]` headings below; `gemini-images` uses `gemini-images-vX.Y.Z` and `## [gemini-images X.Y.Z]`. They moved together up to `v0.2.0` (the agy migration shipped both at 0.2.0) and have diverged since, so a bare version here means `gemini` unless the heading says otherwise. See [CLAUDE.md](CLAUDE.md#releasing) for the tag rules and [Versioning](CLAUDE.md#versioning) for when to bump.
 
+## [0.3.1] — 2026-11-13
+
+`gemini` only. The default model no longer exists.
+
+### Fixed
+
+- **Every command failed without `--model`.** agy 1.5.3 rejects `gemini-3.6-flash-high`, `gemini-3.7-flash-high` and `gemini-3.1-pro-high` with `invalid model selection`, and those were the defaults for review, ask, adversarial-review, setup and implement, plus the targets of both aliases. All commands now default to `gemini-4-hydrogen-high`. `--model flash` resolves to `gemini-3.8-flash-high`, `--model pro` to `gemini-4-argon-high`.
+
+### Why Hydrogen
+
+Measured with the recall eval on the same fixtures, rubrics and judge as the earlier 3.8 Flash and Argon runs, three rounds each:
+
+| Model | Recall | Fabrication gates | Main suite | Avg. latency per case |
+|-------|--------|-------------------|------------|-----------------------|
+| `gemini-4-hydrogen-high` | 36/51 (71%) | 21/21 | 13/13 | ~31 s |
+| `gemini-3.8-flash-high` | 35/50 (70%) | 21/21 | 12/13 | ~193 s |
+| `gemini-4-argon-high` | 23/51 (45%) | 21/21 | — | ~45 s |
+
+A tie on recall, not a win — Hydrogen reliably catches defects 3.8 misses and misses two that 3.8 catches every time — decided by latency. The main suite is a single round. `/gemini:implement` follows review onto Hydrogen; its code-writing quality has not been measured here.
+
+## [gemini-images 0.2.2] — 2026-11-13
+
+`gemini-images` only.
+
+### Fixed
+
+- **The default `AGY_MODEL` no longer exists.** `gemini-3.6-flash-high` is rejected by agy 1.5.3, so the Gemini half of every image read failed: with tesseract installed you got OCR text only, without it Claude read the raw image and the prompt cache took the hit the plugin exists to prevent. The default is now `gemini-4-hydrogen-high`. If you set `AGY_MODEL` yourself, check it against `agy models`.
+
 ## [gemini-images 0.2.1] — 2026-09-22
 
 `gemini-images` only. `doctor.sh`'s diagnostics had drifted from the runtime code they exist to verify — found while turning a historical commit into an eval fixture (`eval/ground-truth/doctor-agy-bin.md`), fixed here.
@@ -207,6 +235,8 @@ Initial open-source release.
 - **`gemini-images`** — `PreToolUse` hook on `Read` that resizes an image, describes it through Gemini, runs tesseract OCR in parallel, and hands Claude the text so the prompt cache survives.
 - promptfoo eval suite with LLM-as-judge rubrics over real-world diffs.
 
+[0.3.1]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.3.0...v0.3.1
+[gemini-images 0.2.2]: https://github.com/haunchen/gemini-plugin-cc/compare/gemini-images-v0.2.1...gemini-images-v0.2.2
 [gemini-images 0.2.1]: https://github.com/haunchen/gemini-plugin-cc/releases/tag/gemini-images-v0.2.1
 [0.3.0]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.2.1...v0.2.2

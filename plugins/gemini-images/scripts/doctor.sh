@@ -98,7 +98,7 @@ if [ "$VERBOSE" = "1" ]; then
   echo
   echo "== Environment =="
   echo "PLUGIN_DIR: $PLUGIN_DIR"
-  echo "AGY_MODEL: ${AGY_MODEL:-gemini-3.6-flash-high (default)}"
+  echo "AGY_MODEL: ${AGY_MODEL:-gemini-4-hydrogen-high (default)}"
   echo "MAX_WIDTH: ${MAX_WIDTH:-1568 (default)}"
   echo "OCR_BIN: $OCR_BIN"
   echo "AGY_BIN: $AGY_BIN"

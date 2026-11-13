@@ -84,7 +84,7 @@ Required checks must all pass — including `agent installed: gemini-image-descr
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `AGY_MODEL` | `gemini-3.6-flash-high` | Model passed to agy `--model` |
+| `AGY_MODEL` | `gemini-4-hydrogen-high` | Model passed to agy `--model` |
 | `MAX_WIDTH` | `1568` | Resize ceiling (pixels) |
 | `OCR_BIN` | `tesseract` | OCR binary; set to `none` to disable |
 | `OCR_LANG` | `chi_tra+eng` | tesseract `-l` value. Falls back to default if the pack is missing. |

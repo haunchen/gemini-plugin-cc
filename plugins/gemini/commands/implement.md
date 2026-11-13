@@ -28,11 +28,11 @@ Keep the output as BEFORE. If it is non-empty, tell the user which files are alr
 
 ## Step 2: Parse arguments
 
-`--model <value>`: extract as MODEL and remove the pair from $ARGUMENTS. If absent, MODEL = `gemini-3.7-flash-high`.
+`--model <value>`: extract as MODEL and remove the pair from $ARGUMENTS. If absent, MODEL = `gemini-4-hydrogen-high`.
 
-Aliases: `flash` → `gemini-3.7-flash-high`, `pro` → `gemini-3.1-pro-high`. Anything else passes through unchanged (`agy models` lists the slugs).
+Aliases: `flash` → `gemini-3.8-flash-high`, `pro` → `gemini-4-argon-high`. Anything else passes through unchanged (`agy models` lists the slugs).
 
-The default is 3.7 rather than the 3.6 that `/gemini:review` uses, and the split is deliberate: measured on this repo's eval suite the two are indistinguishable at reviewing, so review stays where it is, while 3.7's gains are in writing code, which is this command's entire job.
+The default matches `/gemini:review`. Google positions Hydrogen as the 3.8 Flash replacement for coding and agentic work; its implement quality has not been measured on this repo yet.
 
 `--brief <path>`: Read the file and use its contents as BRIEF. Remove the pair from $ARGUMENTS. If the path does not exist, say which one and stop.
 

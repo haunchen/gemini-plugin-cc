@@ -10,11 +10,11 @@ Get a devil's advocate review using Gemini via the Antigravity CLI (`agy`). Inst
 
 Check if $ARGUMENTS contains `--model <value>`:
 - If yes: extract the value as MODEL, remove `--model <value>` from $ARGUMENTS
-- If no: set MODEL = flash
+- If no: set MODEL = `gemini-4-hydrogen-high`
 
 Map the alias to an agy model slug:
-- `flash` → `gemini-3.6-flash-high` (the default)
-- `pro` → `gemini-3.1-pro-high` — an older generation than 3.6 flash; available for explicit opt-in, not recommended
+- `flash` → `gemini-3.8-flash-high` — the previous generation
+- `pro` → `gemini-4-argon-high` — the heavy reasoning model, for explicit opt-in
 - Anything else is passed through unchanged (run `agy models` to list available slugs).
 
 ## Step 2: Determine input
