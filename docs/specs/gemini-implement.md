@@ -76,7 +76,7 @@ last_modified: 2026-08-14
 - **Rationale**: 初版寫「ambiguous or incomplete 就停」。以 brief「Add caching to the format module so it is faster」實測，agent 直接實作無上限 `Map` 快取於兩個函式、回報 `DONE`、無任何 concerns——它不認為那算 ambiguous。改為五項字面判準後同一 brief 得到 `NEEDS_CONTEXT`、零檔案寫入、列出三項待裁定決策並附建議；以完整規格的 brief 回歸測試仍正常完成並寫入兩檔，可見判準具鑑別力而非一律拒絕。模型有「想幫上忙」的傾向，抽象指令壓不住它，可勾選的條件可以
 - **Date**: 2026-08-14
 
-### D6: 預設 3.7 flash，而 `/gemini:review` 續用 3.6
+### D6: 預設 3.7 flash，而 `/gemini:review` 續用 3.6（已由 D9 取代）
 - **Decision**: `/gemini:implement` 預設 `gemini-3.7-flash-high`；不動 review 的預設
 - **Rationale**: 以本 repo eval 實測，兩者在 review 上分不出高下：既有 12 案例各 12/12，為此次新增的四個推理密集案例各 4/4，16 案例雙向順序的 pairwise 對比（Claude Sonnet 4.6 評判）決定性結果 5:2，該樣本數下屬雜訊。既然 review 沒有可測得的改善就不動它（換預設本身有風險而無收益）。而 Google 公布的 3.7 增益集中在寫程式（DeepSWE v1.1 49.0% → 65.3%），正是本命令的工作內容，故新命令採用 3.7。兩命令預設不同是有依據的分歧，不是疏漏
 - **Date**: 2026-08-14
@@ -90,3 +90,8 @@ last_modified: 2026-08-14
 - **Decision**: 於 README 與本檔明記：`tools` 白名單保證的是「不能寫」，不保證「能讀多少」
 - **Rationale**: 實測 `view_file` 可開啟 `--add-dir` 以外的任意絕對路徑。既有文件把唯讀描述為比 `--admin-policy` 更強的保證，該敘述對寫入成立、對讀取範圍不成立。實務上 review 不會亂讀，是因為 gemini-review 的 prompt 規定只讀 repository root 底下（見 gemini-review D16），那是行為約束不是機制邊界，兩者不應混為一談。此事與 implement 無直接關係，但在調查 implement 的圍籬時才被測出來，記於此並回頭修正 README
 - **Date**: 2026-08-14
+
+### D9: 預設改為 Gemini 4 Hydrogen high，與 review 相同
+- **Decision**: `/gemini:implement` 預設 `gemini-4-hydrogen-high`；別名 `flash` → `gemini-3.8-flash-high`、`pro` → `gemini-4-argon-high`
+- **Rationale**: D6 的 3.6／3.7 都已從 agy 下架（1.5.3 回 `invalid model selection`），不帶 `--model` 會直接失敗。Google 把 Hydrogen 定位為 3.8 Flash 的後繼、主打寫程式與 agentic 工作，review 上也量到與 3.8 打平（見 gemini-review D29），故兩命令回到同一預設。本 repo 沒有 implement 的 eval，Hydrogen 寫程式的品質未量；唯一的實作對照是 2026-10-17 一個重構案例，Argon 與 3.8 Flash 都完成，不足以挑出 Argon
+- **Date**: 2026-11-13

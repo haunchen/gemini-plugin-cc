@@ -37,7 +37,7 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 
 ### R7: 模型切換參數
 - **Level**: MUST
-- **Description**: 所有 command 支援 `--model <value>` 參數，未指定時一律 `gemini-3.6-flash-high`（effort 固定 high）。別名 `flash` → `gemini-3.6-flash-high`、`pro` → `gemini-3.1-pro-high`（保留供明示選用），其餘值原樣傳給 agy。
+- **Description**: 所有 command 支援 `--model <value>` 參數，未指定時一律 `gemini-4-hydrogen-high`（effort 固定 high）。別名 `flash` → `gemini-3.8-flash-high`、`pro` → `gemini-4-argon-high`（保留供明示選用），其餘值原樣傳給 agy。
 
 ### R8: Ask 提問功能
 - **Level**: MUST
@@ -218,7 +218,7 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Rationale**: 直接 `agy plugin install` 整個 CC plugin 會把 5 個 command 轉成 agy skill，內容是 CC command.md 逐字複製（含 `$ARGUMENTS` / `allowed-tools` 等不可攜語法），污染 agy skill 清單。agy 只需要 system prompt 容器
 - **Date**: 2026-07-31
 
-### D10: 取消 Pro 預設，全面改用 3.6 flash-high
+### D10: 取消 Pro 預設，全面改用 3.6 flash-high（已由 D29 取代）
 - **Decision**: 四個 command 預設一律 `gemini-3.6-flash-high`，effort 固定 high；429 fallback 目標從 flash 改為 `gemini-3.5-flash-high`。`pro` 別名保留但不再是預設
 - **Rationale**: agy 的 Pro 是 `gemini-3.1-pro`，比 3.6 flash 落後兩個世代，2026-04-16 訂 Pro routing 時「Pro 品質 > Flash」的前提已反轉；flash-high 在 review eval 拿 10/10 滿分，無品質缺口需要 Pro 補；Pro 頻繁 429 本來就是 fallback 邏輯的存在理由，預設改 flash 後這個痛點一併消失。fallback 改指 3.5 flash 是因為預設已是 3.6 flash-high，退回同一個 slug 等於原地重試——換模型池的推論尚未實測，effort 檔位是否影響配額亦未知
 - **Date**: 2026-07-31
@@ -278,3 +278,8 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Decision**: 不新寫刻意安排「明顯／中等／需推理」三層的合成 diff。改在 ground truth 為每條既有缺陷標 tier，由 score 腳本按 tier 切分 recall
 - **Rationale**: 新造梯度 diff 的缺陷會是憑空寫的，不是人工查證過的真缺陷，與整份設計「不憑空造缺陷」的前提直接衝突。而現有素材本就含梯度：`migration-cli-entrypoint.diff` 的 G9 / G4、G10 / G8 正好是三層，`snowflake-filter.diff` 的 `Number()` 精度是另一個 L3。標註路線另有一項合成 diff 沒有的好處——每加一份 fixture 都自動進梯度讀數。D22 量到的 trade-off 正落在這個維度上：arm N 的「不得臆測未見程式碼」同時擋掉虛構的外鍵與 snowflake 精度，兩者都是 L3，tier 切分讓下次改 prompt 時看得出是不是又在兩種失效模式之間搬運
 - **Date**: 2026-09-22
+
+### D29: 全面改用 Gemini 4 Hydrogen high
+- **Decision**: 所有 command 與 gemini-images 的預設改為 `gemini-4-hydrogen-high`；別名 `flash` → `gemini-3.8-flash-high`、`pro` → `gemini-4-argon-high`
+- **Rationale**: agy 1.5.3 已不接受 `gemini-3.6-flash-high`／`3.7-flash-high`／`3.1-pro-high`（`invalid model selection`），舊預設不帶 `--model` 會直接失敗，非換不可。選 Hydrogen 不選 3.8 Flash 或 Argon 是量出來的：recall eval（fixture、rubric、judge 與 3.8／Argon 那批逐字相同）三輪 36/51，3.8 Flash high 35/50、Argon high 23/51、Argon medium 28/51，fabrication 全為 21/21；主套件單輪 13/13，3.8 為 12/13。逐題是換題不是全面贏——Hydrogen 穩定抓到 AS2、多半抓到 RR1，但 G9 只中 1/3、DR2 三輪全漏，兩題 3.8 都是三輪全中。打平之下決定性的是延遲：recall 每案平均約 31 秒，3.8 約 193 秒。`pro` 改指 Argon 是因為它是同代較重的模型，但在 review 上 recall 較低，只供明示選用。implement 一併換是因為 D6 的兩個選項都已下架；Hydrogen 寫程式的品質尚未在本 repo 量過（見 gemini-implement D9）
+- **Date**: 2026-11-13

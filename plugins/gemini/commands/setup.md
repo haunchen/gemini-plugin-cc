@@ -8,7 +8,7 @@ argument-hint: [--model <model>]
 
 Check if $ARGUMENTS contains `--model <value>`:
 - If yes: extract the value as MODEL, remove `--model <value>` from $ARGUMENTS
-- If no: set MODEL = `gemini-3.6-flash-high`
+- If no: set MODEL = `gemini-4-hydrogen-high`
 
 Run the following checks in order and report the results.
 

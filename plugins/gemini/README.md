@@ -100,8 +100,6 @@ What it does around the edit:
 
 Two things it will not do. It has no shell, so tests it writes have never run — you get the exact command to run them, and it is required to say they are unrun rather than claim they pass. And when the brief leaves a real decision open (state with no bound, a goal that is only "faster", more than one plausible file), it writes nothing and comes back with `NEEDS_CONTEXT` plus the decisions it needs from you.
 
-Default model is 3.7 Flash here, against 3.6 for review. The two are indistinguishable at reviewing on this repo's eval suite; 3.7's measured gains are in writing code.
-
 ### Reviewing against requirements
 
 Point `--spec` at whatever states the intent — a spec, a design doc, a task brief — and the review returns a second verdict:
@@ -121,12 +119,13 @@ It reports three things: requirements that were skipped, functionality nobody as
 
 ### Models
 
-All commands default to `gemini-3.6-flash-high`, with reasoning effort pinned to `high`.
+All commands default to `gemini-4-hydrogen-high`, with reasoning effort pinned to `high`. On this repo's review recall eval it matches 3.8 Flash (36/51 vs 35/50) at roughly a sixth of the latency.
 
 | `--model` value | Resolves to |
 |-----------------|-------------|
-| `flash` | `gemini-3.6-flash-high` (default) |
-| `pro` | `gemini-3.1-pro-high` — an older generation than 3.6 flash; available, not recommended |
+| *(omitted)* | `gemini-4-hydrogen-high` |
+| `flash` | `gemini-3.8-flash-high` — the previous generation |
+| `pro` | `gemini-4-argon-high` — the heavy reasoning model; scored lower recall on review (23/51) |
 | anything else | passed to agy unchanged — run `agy models` for the list |
 
 There is no automatic fallback on quota errors. A 429 surfaces as-is; retry or pass a different `--model`.

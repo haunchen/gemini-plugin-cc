@@ -9,7 +9,7 @@ if (!imagePath) {
 }
 
 const agyBin = process.env.AGY_BIN || "agy";
-const agyModel = process.env.AGY_MODEL || "gemini-3.6-flash-high";
+const agyModel = process.env.AGY_MODEL || "gemini-4-hydrogen-high";
 const imageDir = dirname(imagePath);
 
 // The system prompt lives in the gemini-image-describe agent, installed via
