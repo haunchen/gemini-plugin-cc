@@ -37,7 +37,7 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 
 ### R7: 模型切換參數
 - **Level**: MUST
-- **Description**: 所有 command 支援 `--model <value>` 參數，未指定時一律 `gemini-4-hydrogen-high`（effort 固定 high）。別名 `flash` → `gemini-3.8-flash-high`、`pro` → `gemini-4-argon-high`（保留供明示選用），其餘值原樣傳給 agy。
+- **Description**: 所有 command 支援 `--model <value>` 參數，未指定時一律 `gemini-4-hydrogen-high`（effort 固定 high）。別名 `flash` → `gemini-3.8-flash-high`、`pro` → `gemini-4-neon-high`（保留供明示選用），其餘值原樣傳給 agy。
 
 ### R8: Ask 提問功能
 - **Level**: MUST
@@ -280,6 +280,11 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Date**: 2026-09-22
 
 ### D29: 全面改用 Gemini 4 Hydrogen high
-- **Decision**: 所有 command 與 gemini-images 的預設改為 `gemini-4-hydrogen-high`；別名 `flash` → `gemini-3.8-flash-high`、`pro` → `gemini-4-argon-high`
+- **Decision**: 所有 command 與 gemini-images 的預設改為 `gemini-4-hydrogen-high`；別名 `flash` → `gemini-3.8-flash-high`、`pro` → `gemini-4-argon-high`（`pro` 部分 superseded by D30）
 - **Rationale**: agy 1.5.3 已不接受 `gemini-3.6-flash-high`／`3.7-flash-high`／`3.1-pro-high`（`invalid model selection`），舊預設不帶 `--model` 會直接失敗，非換不可。選 Hydrogen 不選 3.8 Flash 或 Argon 是量出來的：recall eval（fixture、rubric、judge 與 3.8／Argon 那批逐字相同）三輪 36/51，3.8 Flash high 35/50、Argon high 23/51、Argon medium 28/51，fabrication 全為 21/21；主套件單輪 13/13，3.8 為 12/13。逐題是換題不是全面贏——Hydrogen 穩定抓到 AS2、多半抓到 RR1，但 G9 只中 1/3、DR2 三輪全漏，兩題 3.8 都是三輪全中。打平之下決定性的是延遲：recall 每案平均約 31 秒，3.8 約 193 秒。檔位選 high 不選 xhigh：xhigh 三輪 38/51，多出的兩分落在逐輪變異內（RR1、LT1 較穩，G9 反而三輪全漏），延遲卻是 high 的三倍（約 96 秒）。`pro` 改指 Argon 是因為它是同代較重的模型，但在 review 上 recall 較低，只供明示選用。implement 一併換是因為 D6 的兩個選項都已下架；Hydrogen 寫程式的品質尚未在本 repo 量過（見 gemini-implement D9）
 - **Date**: 2026-11-13
+
+### D30: `pro` 別名改指 Gemini 4 Neon high，預設維持 Hydrogen
+- **Decision**: 別名 `pro` → `gemini-4-neon-high`，取代 D29 的 `gemini-4-argon-high`；預設與 `flash` 不變
+- **Rationale**: Neon（2026-11-18 發布，Google 定位在 Carbon 與 Hydrogen 之間）以同一套 recall eval 三輪 39/51（76%），Hydrogen high 36/51、xhigh 38/51、Argon high 23/51；fabrication 21/21；三輪逐題結果完全相同。相對 Hydrogen 穩定多抓 LT1、RR1、DR1，G9 三輪全漏（Hydrogen 1/3）。`pro` 指向 recall 最低的 Argon 等於讓明示要「更深」的使用者拿到更差的結果，換成 Neon 才名實相符。不升為預設的理由有二：每案延遲約 73 秒（主套件 51 秒），是 Hydrogen 的 2.2～2.4 倍；主套件單輪 12/13，在 `ci-memory-optimization` 斷言 `--expose-gc` 不在 `NODE_OPTIONS` 允許清單、三支 workflow 會立刻 crash 並標 HIGH，而 Node 24.22.1 實測可用，與 Argon-tuned 同型的「驗證不了卻報高嚴重度」。另 Neon 在 Antigravity 只開給付費 Google AI Pro／Ultra
+- **Date**: 2026-11-19

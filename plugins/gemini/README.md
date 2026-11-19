@@ -125,7 +125,7 @@ All commands default to `gemini-4-hydrogen-high`, with reasoning effort pinned t
 |-----------------|-------------|
 | *(omitted)* | `gemini-4-hydrogen-high` |
 | `flash` | `gemini-3.8-flash-high` — the previous generation |
-| `pro` | `gemini-4-argon-high` — the heavy reasoning model; scored lower recall on review (23/51) |
+| `pro` | `gemini-4-neon-high` — the deeper model; higher recall on review (39/51) at about twice the latency, needs a paid Google AI Pro or Ultra plan |
 | anything else | passed to agy unchanged — run `agy models` for the list |
 
 There is no automatic fallback on quota errors. A 429 surfaces as-is; retry or pass a different `--model`.

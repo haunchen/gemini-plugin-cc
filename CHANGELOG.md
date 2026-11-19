@@ -4,6 +4,26 @@ All notable changes to this project are documented here.
 
 The two plugins are versioned and released independently. `gemini` uses the bare `vX.Y.Z` tags and plain `## [X.Y.Z]` headings below; `gemini-images` uses `gemini-images-vX.Y.Z` and `## [gemini-images X.Y.Z]`. They moved together up to `v0.2.0` (the agy migration shipped both at 0.2.0) and have diverged since, so a bare version here means `gemini` unless the heading says otherwise. See [CLAUDE.md](CLAUDE.md#releasing) for the tag rules and [Versioning](CLAUDE.md#versioning) for when to bump.
 
+## [0.3.2] — 2026-11-19
+
+`gemini` only. No agent prompt changed, so there is no need to re-run `/gemini:setup`.
+
+### Changed
+
+- **`--model pro` now resolves to `gemini-4-neon-high`** instead of `gemini-4-argon-high`. `pro` is the alias for asking a deeper model, and Argon had the lowest review recall of every model measured. Neon is only available on paid Google AI Pro and Ultra plans. The default stays `gemini-4-hydrogen-high`.
+
+### Why Neon for `pro`, not the default
+
+Same recall eval, fixtures, rubrics and judge as 0.3.1, three rounds each:
+
+| Model | Recall | Fabrication gates | Main suite | Avg. latency per case |
+|-------|--------|-------------------|------------|-----------------------|
+| `gemini-4-neon-high` | 39/51 (76%) | 21/21 | 12/13 | ~73 s |
+| `gemini-4-hydrogen-high` | 36/51 (71%) | 21/21 | 13/13 | ~31 s |
+| `gemini-4-argon-high` | 23/51 (45%) | 21/21 | — | ~45 s |
+
+Neon gave identical per-defect results in all three rounds and reliably catches three defects Hydrogen sometimes misses. It is not the default because it costs over twice the latency and dropped the one main-suite case Hydrogen passed: it rated `--expose-gc` in `NODE_OPTIONS` as a HIGH "every workflow crashes" bug, which Node 24 accepts. `/gemini:implement` follows review onto Neon for `pro`; its code-writing quality has not been measured here.
+
 ## [0.3.1] — 2026-11-13
 
 `gemini` only. The default model no longer exists.
@@ -235,6 +255,7 @@ Initial open-source release.
 - **`gemini-images`** — `PreToolUse` hook on `Read` that resizes an image, describes it through Gemini, runs tesseract OCR in parallel, and hands Claude the text so the prompt cache survives.
 - promptfoo eval suite with LLM-as-judge rubrics over real-world diffs.
 
+[0.3.2]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/haunchen/gemini-plugin-cc/compare/v0.3.0...v0.3.1
 [gemini-images 0.2.2]: https://github.com/haunchen/gemini-plugin-cc/compare/gemini-images-v0.2.1...gemini-images-v0.2.2
 [gemini-images 0.2.1]: https://github.com/haunchen/gemini-plugin-cc/releases/tag/gemini-images-v0.2.1

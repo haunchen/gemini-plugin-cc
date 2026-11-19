@@ -14,7 +14,7 @@ Check if $ARGUMENTS contains `--model <value>`:
 
 Map the alias to an agy model slug:
 - `flash` → `gemini-3.8-flash-high` — the previous generation; same review recall as Hydrogen, about six times slower
-- `pro` → `gemini-4-argon-high` — the heavy reasoning model; measured lower recall than Hydrogen on review, available for explicit opt-in
+- `pro` → `gemini-4-neon-high` — the deeper model; higher review recall than Hydrogen at about twice the latency, available for explicit opt-in (needs a paid Google AI Pro or Ultra plan)
 - Anything else is passed through unchanged (run `agy models` to list available slugs).
 
 ## Step 1b: Parse --spec parameter

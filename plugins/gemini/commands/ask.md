@@ -14,7 +14,7 @@ Check if $ARGUMENTS contains `--model <value>`:
 
 Map the alias to an agy model slug:
 - `flash` → `gemini-3.8-flash-high` — the previous generation
-- `pro` → `gemini-4-argon-high` — the heavy reasoning model, for explicit opt-in
+- `pro` → `gemini-4-neon-high` — the deeper model, for explicit opt-in (needs a paid Google AI Pro or Ultra plan)
 - Anything else is passed through unchanged (run `agy models` to list available slugs).
 
 ## Step 2: Determine input

@@ -92,6 +92,11 @@ last_modified: 2026-08-14
 - **Date**: 2026-08-14
 
 ### D9: 預設改為 Gemini 4 Hydrogen high，與 review 相同
-- **Decision**: `/gemini:implement` 預設 `gemini-4-hydrogen-high`；別名 `flash` → `gemini-3.8-flash-high`、`pro` → `gemini-4-argon-high`
+- **Decision**: `/gemini:implement` 預設 `gemini-4-hydrogen-high`；別名 `flash` → `gemini-3.8-flash-high`、`pro` → `gemini-4-argon-high`（`pro` 部分 superseded by D10）
 - **Rationale**: D6 的 3.6／3.7 都已從 agy 下架（1.5.3 回 `invalid model selection`），不帶 `--model` 會直接失敗。Google 把 Hydrogen 定位為 3.8 Flash 的後繼、主打寫程式與 agentic 工作，review 上也量到與 3.8 打平（見 gemini-review D29），故兩命令回到同一預設。本 repo 沒有 implement 的 eval，Hydrogen 寫程式的品質未量；唯一的實作對照是 2026-10-17 一個重構案例，Argon 與 3.8 Flash 都完成，不足以挑出 Argon
 - **Date**: 2026-11-13
+
+### D10: `pro` 別名改指 Gemini 4 Neon high
+- **Decision**: 別名 `pro` → `gemini-4-neon-high`，與 review 的 `pro` 一致（見 gemini-review D30）；預設維持 Hydrogen
+- **Rationale**: 別名跨命令一致比各自挑模型重要，使用者不必記哪支命令的 `pro` 指什麼。Google 把 Neon 定位為寫程式與 agentic 工作的較深一檔，但本 repo 沒有 implement 的 eval，Neon 寫程式的品質未量
+- **Date**: 2026-11-19
