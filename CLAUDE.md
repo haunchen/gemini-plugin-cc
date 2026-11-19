@@ -103,7 +103,7 @@ Three things about them are load-bearing, and none of them fail loudly:
 
 Change any of the three strings and you must change both sides in the same commit: `plugins/gemini/commands/review.md` and `plugins/gemini/agy/agents/gemini-review/agent.md`.
 
-Hydrogen is the default because it ties 3.8 Flash on the recall eval (36/51 vs 35/50, fabrication 21/21 both) at about a sixth of the latency, while Argon — the heavier model — scored 23/51 with the same agent. `--model flash` resolves to `gemini-3.8-flash-high`, `--model pro` to `gemini-4-argon-high`, and any other value passes through to agy unchanged (`agy models` lists the slugs). See `docs/specs/gemini-review.md` D29.
+Hydrogen is the default because it ties 3.8 Flash on the recall eval (36/51 vs 35/50, fabrication 21/21 both) at about a sixth of the latency, while Argon — the heavier model — scored 23/51 with the same agent. `--model flash` resolves to `gemini-3.8-flash-high`, `--model pro` to `gemini-4-neon-high`, and any other value passes through to agy unchanged (`agy models` lists the slugs). Neon is the `pro` target rather than the default: it scores higher (39/51) but at over twice Hydrogen's latency, and it repeated the main-suite false positive the suite exists to catch. See `docs/specs/gemini-review.md` D29 and D30.
 
 **agy drops retired slugs outright.** `gemini-3.6-flash-high`, `3.7-flash-high` and `3.1-pro-high` all fail with `invalid model selection` on agy 1.5.3, and every command had one of them as its default. When Google ships a new generation, run `agy models` before trusting any hard-coded slug in this repo.
 

@@ -30,7 +30,7 @@ Keep the output as BEFORE. If it is non-empty, tell the user which files are alr
 
 `--model <value>`: extract as MODEL and remove the pair from $ARGUMENTS. If absent, MODEL = `gemini-4-hydrogen-high`.
 
-Aliases: `flash` → `gemini-3.8-flash-high`, `pro` → `gemini-4-argon-high`. Anything else passes through unchanged (`agy models` lists the slugs).
+Aliases: `flash` → `gemini-3.8-flash-high`, `pro` → `gemini-4-neon-high`. Anything else passes through unchanged (`agy models` lists the slugs).
 
 The default matches `/gemini:review`. Google positions Hydrogen as the 3.8 Flash replacement for coding and agentic work; its implement quality has not been measured on this repo yet.
 
