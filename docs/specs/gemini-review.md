@@ -288,3 +288,8 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Decision**: 別名 `pro` → `gemini-4-neon-high`，取代 D29 的 `gemini-4-argon-high`；預設與 `flash` 不變
 - **Rationale**: Neon（2026-11-18 發布，Google 定位在 Carbon 與 Hydrogen 之間）以同一套 recall eval 三輪 39/51（76%），Hydrogen high 36/51、xhigh 38/51、Argon high 23/51；fabrication 21/21；三輪逐題結果完全相同。相對 Hydrogen 穩定多抓 LT1、RR1、DR1，G9 三輪全漏（Hydrogen 1/3）。`pro` 指向 recall 最低的 Argon 等於讓明示要「更深」的使用者拿到更差的結果，換成 Neon 才名實相符。不升為預設的理由有二：每案延遲約 73 秒（主套件 51 秒），是 Hydrogen 的 2.2～2.4 倍；主套件單輪 12/13，在 `ci-memory-optimization` 斷言 `--expose-gc` 不在 `NODE_OPTIONS` 允許清單、三支 workflow 會立刻 crash 並標 HIGH，而 Node 24.22.1 實測可用，與 Argon-tuned 同型的「驗證不了卻報高嚴重度」。另 Neon 在 Antigravity 只開給付費 Google AI Pro／Ultra
 - **Date**: 2026-11-19
+
+### D31: `pro` 維持 Neon high，不改 xhigh
+- **Decision**: `pro` 別名維持 `gemini-4-neon-high`，不改指 `gemini-4-neon-xhigh`
+- **Rationale**: 同一套 recall eval（fixture、rubric、judge 與 D30 逐字相同，agy 1.5.14）三輪 38/51，Neon high 39/51；fabrication 21/21。逐題與 high 完全相同，只差 LT1 在一輪漏掉——xhigh 沒有多抓任何一題，G8、G9、DR2、LT2 照樣三輪全漏。主套件同樣卡在 `ci-memory-optimization`：該格 judge 回 `No output` 屬解析失敗，但人工讀輸出，與 high 一樣斷言 `--expose-gc` 不允許放在 `NODE_OPTIONS` 並標 HIGH，實質 12/13。每案延遲約 188 秒（主套件 121 秒），是 high 的 2.4～2.6 倍。Neon high 另補一輪（r4）逐題與 11-19 的三輪完全相同，從 D30 那批到 agy 1.5.14 之間沒有漂移。與 Hydrogen 的結果同型（D29）：xhigh 只多花延遲，recall 落在變異內
+- **Date**: 2026-11-23
