@@ -293,3 +293,8 @@ Claude Code plugin，透過 Antigravity CLI（`agy`）驅動 Gemini 提供第二
 - **Decision**: `pro` 別名維持 `gemini-4-neon-high`，不改指 `gemini-4-neon-xhigh`
 - **Rationale**: 同一套 recall eval（fixture、rubric、judge 與 D30 逐字相同，agy 1.5.14）三輪 38/51，Neon high 39/51；fabrication 21/21。逐題與 high 完全相同，只差 LT1 在一輪漏掉——xhigh 沒有多抓任何一題，G8、G9、DR2、LT2 照樣三輪全漏。主套件同樣卡在 `ci-memory-optimization`：該格 judge 回 `No output` 屬解析失敗，但人工讀輸出，與 high 一樣斷言 `--expose-gc` 不允許放在 `NODE_OPTIONS` 並標 HIGH，實質 12/13。每案延遲約 188 秒（主套件 121 秒），是 high 的 2.4～2.6 倍。Neon high 另補一輪（r4）逐題與 11-19 的三輪完全相同，從 D30 那批到 agy 1.5.14 之間沒有漂移。與 Hydrogen 的結果同型（D29）：xhigh 只多花延遲，recall 落在變異內
 - **Date**: 2026-11-23
+
+### D32: `pro` 維持 Neon high，不改指 Carbon high
+- **Decision**: `pro` 別名維持 `gemini-4-neon-high`，不改指 `gemini-4-carbon-high`；預設維持 Hydrogen
+- **Rationale**: Carbon 開放給 Google AI Pro 訂閱後，agy 1.5.15 可用 `gemini-4-carbon-high`。同一套 recall eval（fixture、rubric、judge 與 D30 逐字相同）三輪 39/51，與 Neon high 同分；fabrication 21/21；三輪逐題結果完全相同，也與 Neon high 逐題完全相同——G8、G9、DR2、LT2 照樣三輪全漏，沒有多抓任何一題。主套件單輪 12/13，卡在同一格 `ci-memory-optimization`：斷言 `--expose-gc` 不允許放在 `NODE_OPTIONS`、三支 workflow 會立刻失敗並標 HIGH，與 Neon 同一個誤報；同一格還把 `xlsx@0.18.5` override 的已知 CVE 標 MEDIUM 並列為要求修改的理由，Neon 與 Hydrogen 對同一點都只給標明「無法從 diff 查證」的 LOW，比 Neon 多一層過度升級。每案延遲約 270 秒（主套件 172 秒），是 Neon high 的 3.4～3.7 倍、Hydrogen high 的 7.7～9 倍，比 Neon xhigh 還慢；量測當天早上後端出過錯，延遲可能偏高，但結論不靠延遲——recall 逐題相同已無改換的理由。在 agy 1.5.15 補一輪 Hydrogen high（r4）13/17，與舊三輪的差異只落在原本就逐輪翻動的 DR1、G9、LT1、RR1，延遲同為約 31 秒，舊分數可直接對照。煙霧測試時兩次回 `failed to start conversation: backend returned an empty conversation id`，隨後自行恢復，正式三輪與主套件無 provider error
+- **Date**: 2026-11-24
